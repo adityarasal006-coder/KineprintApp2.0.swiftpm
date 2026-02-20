@@ -7,6 +7,18 @@ struct LearningLabView: View {
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
+    // Game sheet states
+    @State private var showTrajectoryGame = false
+    @State private var showVelocityGame = false
+    @State private var showOscillationGame = false
+    @State private var showLandingGame = false
+    @State private var trajectoryScore = 0
+    @State private var velocityScore = 0
+    @State private var oscillationScore = 0
+    @State private var landingScore = 0
+    
+    private var totalGameScore: Int { trajectoryScore + velocityScore + oscillationScore + landingScore }
+    
     var body: some View {
         ZStack {
                 // Background: Blueprint Grid
@@ -14,7 +26,6 @@ struct LearningLabView: View {
                 
                 GeometryReader { geo in
                     ZStack {
-                        // Moving grid lines for flair
                         ForEach(0..<10) { i in
                             Path { path in
                                 path.move(to: CGPoint(x: 0, y: geo.size.height / 10 * CGFloat(i)))
@@ -41,17 +52,27 @@ struct LearningLabView: View {
                         
                         Spacer()
                         
-                        Button(action: {}) {
-                            Image(systemName: "info.circle")
+                        // Total score display
+                        VStack(alignment: .trailing, spacing: 1) {
+                            Text("TOTAL")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundColor(.gray)
+                            Text("\(totalGameScore)")
+                                .font(.system(size: 16, weight: .heavy, design: .monospaced))
                                 .foregroundColor(neonCyan)
-                                .font(.system(size: 20, weight: .bold))
                         }
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
                     
-                    // Challenge Selection
-                    ChallengeSelectionView(challengeManager: challengeManager)
+                    // Challenge Selection — each button opens its game
+                    ChallengeSelectionView(
+                        challengeManager: challengeManager,
+                        onSelectTrajectory: { showTrajectoryGame = true },
+                        onSelectVelocity: { showVelocityGame = true },
+                        onSelectOscillation: { showOscillationGame = true },
+                        onSelectLanding: { showLandingGame = true }
+                    )
                     
                     // Current Challenge Display
                     CurrentChallengeView(challenge: challengeManager.currentChallenge, challengeManager: challengeManager)
@@ -64,31 +85,72 @@ struct LearningLabView: View {
                 .padding(.top, 10)
             }
         .preferredColorScheme(.dark)
+        .fullScreenCover(isPresented: $showTrajectoryGame) {
+            TrajectoryGameView(score: $trajectoryScore)
+        }
+        .fullScreenCover(isPresented: $showVelocityGame) {
+            VelocityGameView(score: $velocityScore)
+        }
+        .fullScreenCover(isPresented: $showOscillationGame) {
+            OscillationGameView(score: $oscillationScore)
+        }
+        .fullScreenCover(isPresented: $showLandingGame) {
+            LandingGameView(score: $landingScore)
+        }
     }
 }
 
 @available(iOS 16.0, *)
 struct ChallengeSelectionView: View {
     @ObservedObject var challengeManager: ChallengeManager
+    let onSelectTrajectory: () -> Void
+    let onSelectVelocity: () -> Void
+    let onSelectOscillation: () -> Void
+    let onSelectLanding: () -> Void
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
         VStack(spacing: 12) {
-            Text("CHALLENGE SELECT")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
+            Text("TAP A CHALLENGE TO PLAY")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundColor(.gray)
                 .padding(.horizontal, 16)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(ChallengeType.allCases, id: \.self) { type in
-                        ChallengeButtonView(
-                            type: type,
-                            isSelected: challengeManager.selectedChallengeType == type,
-                            action: { challengeManager.selectChallenge(type) }
-                        )
-                    }
+                    ChallengeButtonView(
+                        type: .matchTrajectory,
+                        isSelected: challengeManager.selectedChallengeType == .matchTrajectory,
+                        action: {
+                            challengeManager.selectChallenge(.matchTrajectory)
+                            onSelectTrajectory()
+                        }
+                    )
+                    ChallengeButtonView(
+                        type: .optimizeVelocity,
+                        isSelected: challengeManager.selectedChallengeType == .optimizeVelocity,
+                        action: {
+                            challengeManager.selectChallenge(.optimizeVelocity)
+                            onSelectVelocity()
+                        }
+                    )
+                    ChallengeButtonView(
+                        type: .stabilizeOscillation,
+                        isSelected: challengeManager.selectedChallengeType == .stabilizeOscillation,
+                        action: {
+                            challengeManager.selectChallenge(.stabilizeOscillation)
+                            onSelectOscillation()
+                        }
+                    )
+                    ChallengeButtonView(
+                        type: .landingPrediction,
+                        isSelected: challengeManager.selectedChallengeType == .landingPrediction,
+                        action: {
+                            challengeManager.selectChallenge(.landingPrediction)
+                            onSelectLanding()
+                        }
+                    )
                 }
                 .padding(.horizontal, 16)
             }
@@ -125,19 +187,28 @@ struct ChallengeButtonView: View {
                     .foregroundColor(isSelected ? neonCyan : .gray)
                 
                 Text(type.rawValue)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundColor(isSelected ? neonCyan : .gray)
                     .multilineTextAlignment(.center)
+                
+                Text("▶ PLAY")
+                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
+                    .foregroundColor(isSelected ? .black : neonCyan.opacity(0.5))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(isSelected ? neonCyan : neonCyan.opacity(0.1))
+                    .cornerRadius(6)
             }
-            .frame(width: 70, height: 70)
+            .frame(width: 80, height: 88)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.black.opacity(0.6) : Color.black.opacity(0.3))
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isSelected ? Color(red: 0, green: 0.15, blue: 0.13) : Color.black.opacity(0.3))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 14)
                     .stroke(isSelected ? neonCyan : Color.white.opacity(0.1), lineWidth: isSelected ? 1.5 : 0.5)
             )
+            .shadow(color: isSelected ? neonCyan.opacity(0.2) : .clear, radius: 8)
         }
     }
 }
@@ -350,14 +421,14 @@ enum ChallengeType: String, CaseIterable {
     case matchTrajectory = "Match Trajectory"
     case optimizeVelocity = "Optimize Velocity"
     case stabilizeOscillation = "Stabilize Oscillation"
-    case predictLanding = "Predict Landing Point"
+    case landingPrediction = "Predict Landing Point"
     
     var icon: String {
         switch self {
         case .matchTrajectory: return "location.fill.viewfinder"
         case .optimizeVelocity: return "speedometer"
         case .stabilizeOscillation: return "waveform.path.ecg"
-        case .predictLanding: return "location.magnifyingglass"
+        case .landingPrediction: return "location.magnifyingglass"
         }
     }
 }
@@ -418,7 +489,7 @@ class ChallengeManager: ObservableObject {
                 description: "Minimize oscillation to achieve steady-state motion",
                 targetValue: 0.1
             )
-        case .predictLanding:
+        case .landingPrediction:
             currentChallenge = Challenge(
                 type: type,
                 title: "PREDICT LANDING POINT",
@@ -474,7 +545,7 @@ class ChallengeManager: ObservableObject {
             challenge.currentValue = max(challenge.currentValue - Float.random(in: 0.001...0.005), 0.0)
             challenge.progress = 1.0 - min(challenge.currentValue / challenge.targetValue, 1.0)
             
-        case .predictLanding:
+        case .landingPrediction:
             // Simulate approaching landing prediction
             challenge.currentValue = min(challenge.currentValue + Float.random(in: 0.02...0.05), challenge.targetValue)
             challenge.progress = min(challenge.currentValue / challenge.targetValue, 1.0)

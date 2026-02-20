@@ -19,8 +19,8 @@ let package = Package(
             bundleIdentifier: "com-adi-kineprintApp.KineprintApp",
             displayVersion: "1.0",
             bundleVersion: "1",
-            appIcon: .placeholder(icon: .binoculars),
-            accentColor: .presetColor(.red),
+            appIcon: .placeholder(icon: .twoPeople),
+            accentColor: .presetColor(.mint),
             supportedDeviceFamilies: [
                 .pad,
                 .phone
@@ -39,5 +39,5 @@ let package = Package(
             path: "."
         )
     ],
-    swiftLanguageVersions: [.version("6")]
+    swiftLanguageModes: [.v5]
 )

@@ -9,7 +9,7 @@ import UIKit
 /// Features: LiDAR mesh wireframe, 3D grid, velocity/acceleration vectors with arrowheads,
 /// trajectory ghosting with opacity fade, and neon bloom glow effect.
 @available(iOS 16.0, *)
-class KineprintARView: UIView, @preconcurrency ARSCNViewDelegate, @preconcurrency ARSessionDelegate {
+class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
     var arSCNView: ARSCNView!
     var arSession: ARSession!
     var trackedObjects: [UUID: TrackedObject] = [:]

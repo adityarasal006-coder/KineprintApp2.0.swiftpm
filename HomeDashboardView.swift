@@ -4,6 +4,7 @@ import SwiftUI
 @available(iOS 16.0, *)
 struct HomeDashboardView: View {
     @ObservedObject var viewModel: KineprintViewModel
+    @State private var showingResearch = false
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
 
     var body: some View {
@@ -53,6 +54,32 @@ struct HomeDashboardView: View {
                 }
                 .padding(.horizontal, 20)
                 
+                // Research Folder Link
+                Button(action: { showingResearch = true }) {
+                    HStack {
+                        Image(systemName: "folder.fill.badge.gearshape")
+                            .font(.system(size: 24))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("RESEARCH FOLDER")
+                                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            Text("\(viewModel.researchEntries.count) OBJECTS SCAN LOGGED")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.gray)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                    }
+                    .foregroundColor(neonCyan)
+                    .padding()
+                    .background(neonCyan.opacity(0.1))
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(neonCyan.opacity(0.3), lineWidth: 1))
+                }
+                .padding(.horizontal, 20)
+                .sheet(isPresented: $showingResearch) {
+                    ResearchLibraryView(viewModel: viewModel)
+                }
+                
                 // Instructions
                 VStack(alignment: .leading, spacing: 12) {
                     Text("OPERATIVE DIRECTIVES")
@@ -60,8 +87,8 @@ struct HomeDashboardView: View {
                         .foregroundColor(.gray)
                     
                     DirectiveRow(step: "1", text: "Use the IoT Hub to pair with robotics hardware.")
-                    DirectiveRow(step: "2", text: "Activate the AR Scanner below to track kinetic motion.")
-                    DirectiveRow(step: "3", text: "Engage the Training Lab to verify component knowledge.")
+                    DirectiveRow(step: "2", text: "Activate the AR Scanner to track motion and deep scan objects.")
+                    DirectiveRow(step: "3", text: "Review saved scan data in the Research Folder above.")
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 10)

@@ -3,6 +3,7 @@ import SwiftUI
 #endif
 
 #if os(iOS)
+import AudioToolbox
 import ARKit
 import SceneKit
 import Metal
@@ -11,6 +12,7 @@ import Charts
 import Combine
 import Foundation
 import CoreBluetooth
+import AVFoundation
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -33,6 +35,10 @@ struct KineprintView: View {
     @StateObject private var viewModel = KineprintViewModel()
     @State private var selectedTab: AppTab = .home
     @State private var showingARAnimation = false
+    @State private var showGoodbye = false
+    @State private var hasGreetedToday = false
+    private let speechSynth = AVSpeechSynthesizer()
+    @Environment(\.scenePhase) private var scenePhase
     
     var body: some View {
         ZStack {
@@ -80,11 +86,89 @@ struct KineprintView: View {
                     }
                 }
             }
+            // Goodbye overlay
+            if showGoodbye {
+                ZStack {
+                    Color.black.opacity(0.92)
+                        .ignoresSafeArea()
+                    
+                    VStack(spacing: 20) {
+                        Text("👋")
+                            .font(.system(size: 64))
+                            .scaleEffect(showGoodbye ? 1.0 : 0.5)
+                            .animation(.spring(response: 0.5, dampingFraction: 0.6), value: showGoodbye)
+                        
+                        Text("Goodbye,")
+                            .font(.system(size: 16, weight: .medium, design: .monospaced))
+                            .foregroundColor(.gray)
+                        
+                        Text(viewModel.userName.uppercased() + "!")
+                            .font(.system(size: 28, weight: .heavy, design: .monospaced))
+                            .foregroundColor(Color(red: 0, green: 1, blue: 0.85))
+                            .shadow(color: Color(red: 0, green: 1, blue: 0.85).opacity(0.5), radius: 12)
+                        
+                        Text("We are waiting for you to\ncome back again! 🚀")
+                            .font(.system(size: 13, design: .monospaced))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 4)
+                    }
+                    .scaleEffect(showGoodbye ? 1.0 : 0.7)
+                }
+                .transition(.opacity)
+            }
         }
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
         .animation(.easeInOut, value: viewModel.isOnboardingComplete)
         .animation(.easeInOut, value: selectedTab)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showGoodbye)
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase == .background || newPhase == .inactive {
+                if viewModel.isOnboardingComplete {
+                    showGoodbye = true
+                    speakGoodbye()
+                }
+            } else if newPhase == .active {
+                showGoodbye = false
+                if viewModel.isOnboardingComplete && !viewModel.isBooting {
+                    if !hasGreetedToday {
+                        hasGreetedToday = true
+                        speakWelcomeBack()
+                    }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Voice
+    
+    private var timeGreeting: String {
+        let h = Calendar.current.component(.hour, from: Date())
+        if h >= 1 && h < 12 { return "Good Morning" }
+        else if h >= 12 && h < 16 { return "Good Afternoon" }
+        else { return "Good Evening" }
+    }
+    
+    private func speakWelcomeBack() {
+        let name = viewModel.userName.trimmingCharacters(in: .whitespaces)
+        let text = "\(timeGreeting), \(name)! Welcome back to KinePrint. We are glad you are here."
+        speak(text)
+    }
+    
+    private func speakGoodbye() {
+        let name = viewModel.userName.trimmingCharacters(in: .whitespaces)
+        speak("Goodbye \(name)! We are waiting for you to come back again!")
+    }
+    
+    private func speak(_ text: String) {
+        speechSynth.stopSpeaking(at: .immediate)
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = 0.50
+        utterance.pitchMultiplier = 1.05
+        utterance.volume = 0.9
+        speechSynth.speak(utterance)
     }
 }
 
@@ -113,6 +197,12 @@ struct ARScannerTab: View {
                 BottomDashboard(viewModel: viewModel)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
+            }
+            
+            // Deep Scan HUD Overlay
+            if viewModel.isDeepScanning {
+                DeepScanHUD(viewModel: viewModel)
+                    .transition(.opacity)
             }
         }
     }
@@ -238,80 +328,218 @@ struct AROpeningAnimation: View {
     }
 }
 
-// MARK: - Boot Sequence Overlay
+// MARK: - Matrix/Hacker Rain Boot Animation
 
 @available(iOS 16.0, *)
 struct BootSequenceView: View {
     @ObservedObject var viewModel: KineprintViewModel
+    @State private var columns: [MatrixColumn] = []
     @State private var bootProgress: CGFloat = 0
-    @State private var terminalText: [String] = []
-    
-    let bootLogs = [
-        "INITIALIZING CORE KINEMATICS...",
-        "LOADING LIDAR MAPPING ENGINE...",
-        "BUFFERING NEURAL PROCESSING UNIT...",
-        "CONNECTING TO BIOMETRIC DATA...",
-        "SYSTEM STABILIZED. WELCOME."
+    @State private var terminalLines: [String] = []
+    @State private var showWelcome = false
+    @State private var displayTimer: Timer? = nil
+
+    private let neonGreen = Color(red: 0.1, green: 1.0, blue: 0.2)
+    private let brightGreen = Color(red: 0.6, green: 1.0, blue: 0.6)
+    private let columnCount = 28
+
+    private let bootMessages = [
+        "> ACCESSING NEURAL CORE...",
+        "> INJECTING KINEMATIC ENGINE...",
+        "> BREACHING LiDAR FIREWALL...",
+        "> DECRYPTING MOTION SENSORS...",
+        "> OVERRIDING PHYSICS MODULE...",
+        "> SYSTEM COMPROMISED. WELCOME."
     ]
-    
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(terminalText, id: \.self) { line in
-                    Text(line)
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(Color(red: 0, green: 1, blue: 0.85))
-                }
-                
-                Spacer()
-                
-                // Progress bar
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("SYSTEM INITIALIZATION: \(Int(bootProgress * 100))%")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(.gray)
-                    
-                    ZStack(alignment: .leading) {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.1))
-                            .frame(height: 4)
-                        
-                        Rectangle()
-                            .fill(Color(red: 0, green: 1, blue: 0.85))
-                            .frame(width: bootProgress * 300, height: 4)
-                            .shadow(color: Color(red: 0, green: 1, blue: 0.85).opacity(0.5), radius: 5)
+
+            // Matrix rain columns
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    ForEach(columns.indices, id: \.self) { i in
+                        MatrixColumnView(column: columns[i], screenHeight: geo.size.height)
+                            .frame(width: geo.size.width / CGFloat(columnCount))
                     }
-                    .frame(width: 300)
                 }
-                .padding(.bottom, 40)
             }
-            .padding(40)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .ignoresSafeArea()
+
+            // Terminal overlay
+            VStack(spacing: 0) {
+                Spacer()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(terminalLines, id: \.self) { line in
+                        Text(line)
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundColor(line.contains("COMPROMISED") || line.contains("WELCOME") ? brightGreen : neonGreen)
+                            .shadow(color: neonGreen.opacity(0.8), radius: 4)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 16)
+
+                // Progress bar
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("SYSTEM BREACH: \(Int(bootProgress * 100))%")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonGreen.opacity(0.7))
+                        .shadow(color: neonGreen.opacity(0.5), radius: 3)
+
+                    GeometryReader { g in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.white.opacity(0.07))
+                                .frame(height: 6)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(
+                                    LinearGradient(colors: [neonGreen, brightGreen], startPoint: .leading, endPoint: .trailing)
+                                )
+                                .frame(width: bootProgress * g.size.width, height: 6)
+                                .shadow(color: neonGreen.opacity(0.9), radius: 6)
+                                .animation(.linear(duration: 0.15), value: bootProgress)
+                        }
+                    }
+                    .frame(height: 6)
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 50)
+            }
+
+            // Welcome flash
+            if showWelcome {
+                VStack(spacing: 12) {
+                    Text("ACCESS GRANTED")
+                        .font(.system(size: 28, weight: .heavy, design: .monospaced))
+                        .foregroundColor(brightGreen)
+                        .shadow(color: neonGreen.opacity(1.0), radius: 20)
+                    Text("KINEPRINT SYSTEMS ONLINE")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonGreen.opacity(0.8))
+                }
+                .transition(.opacity.combined(with: .scale))
+            }
         }
         .onAppear {
-            startBootAnimation()
+            spawnColumns()
+            startBootSequence()
         }
     }
-    
-    func startBootAnimation() {
-        for (index, log) in bootLogs.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(index) * 0.4) {
-                withAnimation {
-                    terminalText.append("> " + log)
-                    bootProgress = CGFloat(index + 1) / CGFloat(bootLogs.count)
+
+    private func spawnColumns() {
+        columns = (0..<columnCount).map { _ in
+            MatrixColumn(
+                chars: Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@#$%&!?"),
+                speed: Double.random(in: 0.04...0.12),
+                startDelay: Double.random(in: 0...1.5),
+                length: Int.random(in: 6...20),
+                currentRow: 0,
+                opacity: Double.random(in: 0.4...1.0)
+            )
+        }
+
+        // Animate columns
+        displayTimer = Timer.scheduledTimer(withTimeInterval: 0.07, repeats: true) { _ in
+            for i in columns.indices {
+                columns[i].advance()
+            }
+        }
+    }
+
+    private func startBootSequence() {
+        let total = bootMessages.count
+        for (idx, msg) in bootMessages.enumerated() {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(idx) * 0.55) {
+                withAnimation(.easeIn(duration: 0.2)) {
+                    terminalLines.append(msg)
+                    bootProgress = CGFloat(idx + 1) / CGFloat(total)
                 }
-                
-                if index == bootLogs.count - 1 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                        withAnimation {
-                            viewModel.isBooting = false
+                if idx == total - 1 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        withAnimation(.spring()) { showWelcome = true }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                            displayTimer?.invalidate()
+                            withAnimation(.easeOut(duration: 0.6)) {
+                                viewModel.isBooting = false
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+// MARK: - Matrix Column Model
+
+struct MatrixColumn {
+    var chars: [Character]
+    var speed: Double
+    var startDelay: Double
+    var length: Int
+    var currentRow: Int
+    var opacity: Double
+    var displayChars: [Character] = []
+    var isActive = false
+    private var delayCounter = 0.0
+
+    init(chars: [Character], speed: Double, startDelay: Double, length: Int, currentRow: Int, opacity: Double) {
+        self.chars = chars
+        self.speed = speed
+        self.startDelay = startDelay
+        self.length = length
+        self.currentRow = currentRow
+        self.opacity = opacity
+    }
+
+    mutating func advance() {
+        if !isActive {
+            delayCounter += 0.07
+            if delayCounter >= startDelay { isActive = true }
+            return
+        }
+        currentRow += 1
+        // Refresh random chars in the column
+        if displayChars.count < length {
+            displayChars.append(chars.randomElement() ?? "0")
+        } else {
+            displayChars.removeFirst()
+            displayChars.append(chars.randomElement() ?? "0")
+        }
+        if currentRow > 40 {
+            currentRow = 0
+            displayChars.removeAll()
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+struct MatrixColumnView: View {
+    let column: MatrixColumn
+    let screenHeight: CGFloat
+    private let charHeight: CGFloat = 20
+    private let neonGreen = Color(red: 0.1, green: 1.0, blue: 0.2)
+    private let brightGreen = Color(red: 0.7, green: 1.0, blue: 0.7)
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Offset for the column's current position
+            Spacer().frame(height: CGFloat(column.currentRow) * charHeight)
+            ForEach(column.displayChars.indices, id: \.self) { i in
+                let isHead = i == column.displayChars.count - 1
+                Text(String(column.displayChars[i]))
+                    .font(.system(size: 14, weight: isHead ? .heavy : .regular, design: .monospaced))
+                    .foregroundColor(isHead ? brightGreen : neonGreen.opacity(column.opacity * Double(i + 1) / Double(column.displayChars.count + 1)))
+                    .shadow(color: neonGreen.opacity(isHead ? 0.9 : 0.3), radius: isHead ? 6 : 2)
+                    .frame(height: charHeight)
+            }
+            Spacer()
+        }
+        .opacity(column.isActive ? 1 : 0)
     }
 }
 
@@ -347,6 +575,17 @@ struct TopNavigationBar: View {
     @ObservedObject var viewModel: KineprintViewModel
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
+    private var timeBasedGreeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour >= 1 && hour < 12 {
+            return "Good Morning"       // 1:00 AM – 11:59 AM
+        } else if hour >= 12 && hour < 16 {
+            return "Good Afternoon"     // 12:00 PM – 3:59 PM
+        } else {
+            return "Good Evening"       // 4:00 PM – 12:59 AM
+        }
+    }
+    
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center) {
@@ -362,40 +601,35 @@ struct TopNavigationBar: View {
                             .foregroundColor(neonCyan)
                     }
                     
-                    Text("BUDDY ACTIVE: WELCOME, \(viewModel.userName.uppercased())")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    Text("\(timeBasedGreeting), \(viewModel.userName.uppercased())")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(neonCyan.opacity(0.6))
                         .padding(.leading, 2)
                 }
                 
                 Spacer()
                 
-                // Status indicators
-                HStack(spacing: 12) {
-                    // LiDAR status
-                    StatusPill(
-                        icon: "lidar.topography",
-                        label: viewModel.lidarAvailable ? "LiDAR" : "PLANE",
-                        isActive: true,
-                        color: neonCyan
-                    )
+                // Clean system status
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(viewModel.trackingActive ? Color.green : neonCyan)
+                        .frame(width: 8, height: 8)
+                        .shadow(color: (viewModel.trackingActive ? Color.green : neonCyan).opacity(0.6), radius: 4)
                     
-                    // Tracking status
-                    StatusPill(
-                        icon: "location.fill",
-                        label: viewModel.trackingActive ? "TRACK" : "IDLE",
-                        isActive: viewModel.trackingActive,
-                        color: viewModel.trackingActive ? Color.green : Color.gray
-                    )
-                    
-                    // Buddy status
-                    StatusPill(
-                        icon: "person.fill.questionmark",
-                        label: buddyStatusLabel(viewModel.buddyStatus),
-                        isActive: true,
-                        color: buddyStatusColor(viewModel.buddyStatus)
-                    )
+                    Text(viewModel.trackingActive ? "TRACKING" : "READY")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(viewModel.trackingActive ? Color.green : neonCyan)
                 }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .background(
+                    Capsule()
+                        .fill(Color.black.opacity(0.5))
+                        .overlay(
+                            Capsule()
+                                .stroke((viewModel.trackingActive ? Color.green : neonCyan).opacity(0.3), lineWidth: 0.5)
+                        )
+                )
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -406,61 +640,6 @@ struct TopNavigationBar: View {
                 .fill(neonCyan.opacity(0.3))
                 .frame(height: 1)
         }
-    }
-    
-    private func buddyStatusLabel(_ status: BuddyStatus) -> String {
-        switch status {
-        case .idle: return "IDLE"
-        case .tracking: return "ACTIVE"
-        case .warning: return "CAUTION"
-        case .providingInsight: return "INSIGHT"
-        case .celebrating: return "SUCCESS"
-        }
-    }
-    
-    private func buddyStatusColor(_ status: BuddyStatus) -> Color {
-        switch status {
-        case .idle: return Color.gray
-        case .tracking: return Color.green
-        case .warning: return Color.orange
-        case .providingInsight: return Color.blue
-        case .celebrating: return Color.yellow
-        }
-    }
-}
-
-@available(iOS 16.0, *)
-struct StatusPill: View {
-    let icon: String
-    let label: String
-    let isActive: Bool
-    let color: Color
-    
-    var body: some View {
-        HStack(spacing: 4) {
-            Circle()
-                .fill(color)
-                .frame(width: 6, height: 6)
-                .opacity(isActive ? 1.0 : 0.3)
-            
-            Image(systemName: icon)
-                .font(.system(size: 10))
-                .foregroundColor(color)
-            
-            Text(label)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(color.opacity(0.9))
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(Color.black.opacity(0.5))
-                .overlay(
-                    Capsule()
-                        .stroke(color.opacity(0.3), lineWidth: 0.5)
-                )
-        )
     }
 }
 
@@ -499,10 +678,137 @@ struct SidebarControls: View {
                 isActive: false,
                 action: { viewModel.clearData() }
             )
+            
+            ControlButton(
+                symbol: "target",
+                label: "Scan",
+                isActive: viewModel.isDeepScanning,
+                action: { viewModel.initiateDeepScan() }
+            )
+        }
+    }
+}
+// MARK: - Deep Scan HUD
+
+@available(iOS 16.0, *)
+struct DeepScanHUD: View {
+    @ObservedObject var viewModel: KineprintViewModel
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.4).ignoresSafeArea()
+            
+            VStack {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("DEEP SCAN IN PROGRESS")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(neonCyan)
+                        Text("IDENTIFYING MATERIAL COMPOSITION...")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.gray)
+                    }
+                    Spacer()
+                    Text("\(Int(viewModel.deepScanProgress * 100))%")
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                }
+                .padding(20)
+                .background(Color.black.opacity(0.8))
+                
+                Spacer()
+                
+                if let entry = viewModel.lastScannedEntry {
+                    VStack(spacing: 20) {
+                        Text("OBJECT ANALYSIS COMPLETE")
+                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .foregroundColor(.green)
+                            .shadow(color: .green.opacity(0.5), radius: 10)
+                        
+                        HStack(spacing: 30) {
+                            // Blueprint Preview
+                            VStack(spacing: 8) {
+                                Text("BLUEPRINT")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.gray)
+                                ZStack {
+                                    Rectangle().stroke(neonCyan.opacity(0.4), lineWidth: 1)
+                                        .frame(width: 120, height: 120)
+                                    // Simulated blueprint lines
+                                    ForEach(0..<4) { i in
+                                        Path { p in
+                                            p.move(to: CGPoint(x: 10, y: 30 * i + 10))
+                                            p.addLine(to: CGPoint(x: 110, y: 30 * i + 10))
+                                        }
+                                        .stroke(neonCyan.opacity(0.2), lineWidth: 0.5)
+                                    }
+                                    Image(systemName: "square.dashed")
+                                        .font(.system(size: 60))
+                                        .foregroundColor(neonCyan.opacity(0.6))
+                                }
+                            }
+                            
+                            // Details
+                            VStack(alignment: .leading, spacing: 12) {
+                                ScanDetailRow(label: "NAME", value: entry.title)
+                                ScanDetailRow(label: "SIZE", value: entry.dimensions)
+                                ScanDetailRow(label: "MAT", value: entry.material)
+                                ScanDetailRow(label: "MASS", value: entry.mass)
+                                ScanDetailRow(label: "QUAL", value: entry.scanQuality)
+                            }
+                        }
+                        .padding(20)
+                        .background(Color.black.opacity(0.85))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(neonCyan.opacity(0.3), lineWidth: 1))
+                        
+                        Text("SAVED TO RESEARCH FOLDER")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(neonCyan.opacity(0.6))
+                    }
+                    .padding(.bottom, 100)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    // Scanning Ring
+                    ZStack {
+                        Circle()
+                            .stroke(neonCyan.opacity(0.2), lineWidth: 2)
+                            .frame(width: 200, height: 200)
+                        Circle()
+                            .trim(from: 0, to: viewModel.deepScanProgress)
+                            .stroke(neonCyan, lineWidth: 4)
+                            .frame(width: 200, height: 200)
+                            .rotationEffect(.degrees(-90))
+                        
+                        Image(systemName: "viewfinder")
+                            .font(.system(size: 60))
+                            .foregroundColor(neonCyan)
+                    }
+                    .padding(.bottom, 140)
+                }
+            }
         }
     }
 }
 
+@available(iOS 16.0, *)
+struct ScanDetailRow: View {
+    let label: String
+    let value: String
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(.gray)
+            Text(value)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(neonCyan)
+        }
+    }
+}
 @available(iOS 16.0, *)
 struct ControlButton: View {
     let symbol: String
@@ -714,6 +1020,18 @@ struct ChartDataPoint: Identifiable {
     let value: Double
 }
 
+@available(iOS 16.0, *)
+struct ResearchEntry: Identifiable, Codable {
+    let id: UUID
+    let date: Date
+    let title: String
+    let dimensions: String
+    let material: String
+    let blueprintData: String // Simulated blueprint string
+    let mass: String
+    let scanQuality: String
+}
+
 // MARK: - ViewModel
 
 @available(iOS 16.0, *)
@@ -725,6 +1043,10 @@ class KineprintViewModel: ObservableObject {
     @Published var trackingActive = false
     @Published var lidarAvailable = false
     @Published var isScanning = true
+    @Published var isDeepScanning = false
+    @Published var deepScanProgress: CGFloat = 0
+    @Published var lastScannedEntry: ResearchEntry?
+    @Published var researchEntries: [ResearchEntry] = []
     
     // Personalization & State
     @AppStorage("userName") var userName: String = ""
@@ -882,6 +1204,58 @@ class KineprintViewModel: ObservableObject {
     
     func stopTracking() {
         trackingActive = false
+    }
+
+    // MARK: - Research & Deep Scan
+    
+    func initiateDeepScan() {
+        isDeepScanning = true
+        deepScanProgress = 0
+        
+        Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
+            DispatchQueue.main.async {
+                self.deepScanProgress += 0.02
+                if self.deepScanProgress >= 1.0 {
+                    timer.invalidate()
+                    self.completeDeepScan()
+                }
+            }
+        }
+    }
+    
+    private func completeDeepScan() {
+        let newEntry = ResearchEntry(
+            id: UUID(),
+            date: Date(),
+            title: "OBJECT_\(Int.random(in: 1000...9999))",
+            dimensions: "\(Double.random(in: 10...50).formatted(.number.precision(.fractionLength(1)))) x \(Double.random(in: 10...50).formatted(.number.precision(.fractionLength(1)))) x \(Double.random(in: 5...20).formatted(.number.precision(.fractionLength(1)))) cm",
+            material: ["AISI 304 Stainless", "6061 Aluminum", "ABS Polymer", "Carbon Fiber Composite"].randomElement() ?? "Metal Alloy",
+            blueprintData: "RAW_BLUEPRINT_VECTOR_\(UUID().uuidString.prefix(8))",
+            mass: "\(Double.random(in: 0.2...5.0).formatted(.number.precision(.fractionLength(2)))) kg",
+            scanQuality: "98.4% NOMINAL"
+        )
+        
+        researchEntries.append(newEntry)
+        lastScannedEntry = newEntry
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.isDeepScanning = false
+            self.lastScannedEntry = nil
+        }
+    }
+    
+    func cloneEntry(_ entry: ResearchEntry) {
+        let cloned = ResearchEntry(
+            id: UUID(),
+            date: Date(),
+            title: entry.title + "_CLONE",
+            dimensions: entry.dimensions,
+            material: entry.material,
+            blueprintData: entry.blueprintData,
+            mass: entry.mass,
+            scanQuality: entry.scanQuality
+        )
+        researchEntries.append(cloned)
     }
 }
 #endif

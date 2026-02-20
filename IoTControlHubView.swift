@@ -638,6 +638,7 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
 @available(iOS 16.0, *)
 struct IoTComponentLibraryView: View {
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    @State private var selectedComponent: IoTComponent?
 
     var body: some View {
         ScrollView {
@@ -651,7 +652,9 @@ struct IoTComponentLibraryView: View {
                         
                         LazyVStack(spacing: 12) {
                             ForEach(IoTComponentsDatabase.shared.getComponents(by: category)) { comp in
-                                ComponentCardView(component: comp)
+                                ComponentCardView(component: comp) {
+                                    selectedComponent = comp
+                                }
                             }
                         }
                     }
@@ -659,58 +662,345 @@ struct IoTComponentLibraryView: View {
             }
             .padding(.vertical, 10)
         }
+        .sheet(item: $selectedComponent) { comp in
+            ComponentDetailView(component: comp)
+        }
     }
 }
 
 @available(iOS 16.0, *)
 struct ComponentCardView: View {
     let component: IoTComponent
+    let onTap: () -> Void
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    @State private var isPressed = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(neonCyan.opacity(0.1))
-                        .frame(width: 44, height: 44)
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(neonCyan.opacity(0.12))
+                            .frame(width: 52, height: 52)
+                        Circle()
+                            .stroke(neonCyan.opacity(0.3), lineWidth: 1)
+                            .frame(width: 52, height: 52)
+                        Image(systemName: component.iconName)
+                            .foregroundColor(neonCyan)
+                            .font(.system(size: 22))
+                            .shadow(color: neonCyan.opacity(0.4), radius: 6)
+                    }
                     
-                    Image(systemName: component.iconName)
-                        .foregroundColor(neonCyan)
-                        .font(.system(size: 20))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(component.name)
+                            .font(.system(size: 16, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                        Text(component.category.rawValue.uppercased())
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(neonCyan.opacity(0.7))
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(neonCyan.opacity(0.5))
                 }
                 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(component.name)
-                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                Text(component.description)
+                    .font(.system(size: 12, weight: .regular, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(2)
+                    .padding(.top, 2)
+            }
+            .padding(14)
+            .background(
+                VisualEffectBlur(blurStyle: .systemUltraThinMaterialDark) {
+                    Rectangle().fill(Color.clear)
+                }
+                .opacity(0.85)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(neonCyan.opacity(0.2), lineWidth: 0.5)
+            )
+            .scaleEffect(isPressed ? 0.97 : 1.0)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 16)
+        .onLongPressGesture(minimumDuration: 0, pressing: { pressing in
+            withAnimation(.easeInOut(duration: 0.1)) { isPressed = pressing }
+        }, perform: {})
+    }
+}
+
+// MARK: - Component Detail View
+
+@available(iOS 16.0, *)
+struct ComponentDetailView: View {
+    let component: IoTComponent
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    @Environment(\.dismiss) var dismiss
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            // Background grid
+            GeometryReader { geo in
+                ForEach(0..<12) { i in
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: geo.size.height / 12 * CGFloat(i)))
+                        path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 12 * CGFloat(i)))
+                    }
+                    .stroke(neonCyan.opacity(0.07), lineWidth: 0.5)
+                }
+            }
+            .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 0) {
+                    // Hero section with large icon
+                    ZStack {
+                        // Glow circles
+                        Circle()
+                            .fill(neonCyan.opacity(0.04))
+                            .frame(width: 200, height: 200)
+                        Circle()
+                            .stroke(neonCyan.opacity(0.1), lineWidth: 1)
+                            .frame(width: 160, height: 160)
+                        Circle()
+                            .stroke(neonCyan.opacity(0.15), lineWidth: 2)
+                            .frame(width: 120, height: 120)
+                        Circle()
+                            .fill(neonCyan.opacity(0.08))
+                            .frame(width: 100, height: 100)
+                        
+                        Image(systemName: component.iconName)
+                            .font(.system(size: 52))
+                            .foregroundColor(neonCyan)
+                            .shadow(color: neonCyan.opacity(0.6), radius: 20)
+                    }
+                    .frame(height: 220)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        LinearGradient(
+                            colors: [neonCyan.opacity(0.05), Color.black],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                     
-                    Text("Function: \(component.useCase)")
-                        .font(.system(size: 11, weight: .regular, design: .monospaced))
-                        .foregroundColor(.gray)
-                        .lineLimit(2)
+                    VStack(alignment: .leading, spacing: 24) {
+                        // Name & category
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(component.name)
+                                .font(.system(size: 26, weight: .heavy, design: .monospaced))
+                                .foregroundColor(.white)
+                            Text(component.category.rawValue.uppercased())
+                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                .foregroundColor(neonCyan)
+                        }
+                        
+                        // Description
+                        Text(component.description)
+                            .font(.system(size: 14, design: .monospaced))
+                            .foregroundColor(.gray)
+                            .lineSpacing(4)
+                        
+                        // Use Case
+                        DetailSection(title: "USE CASE", icon: "lightbulb.fill") {
+                            Text(component.useCase)
+                                .font(.system(size: 13, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.85))
+                                .lineSpacing(3)
+                        }
+                        
+                        // Specifications
+                        DetailSection(title: "SPECIFICATIONS", icon: "list.bullet.clipboard.fill") {
+                            VStack(spacing: 8) {
+                                ForEach(component.specs.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
+                                    HStack(alignment: .top) {
+                                        Text(key)
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(.gray)
+                                            .frame(width: 130, alignment: .leading)
+                                        Text(value)
+                                            .font(.system(size: 11, design: .monospaced))
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                    if key != component.specs.sorted(by: { $0.key < $1.key }).last?.key {
+                                        Divider().background(neonCyan.opacity(0.1))
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Pin Connections
+                        DetailSection(title: "PIN CONNECTIONS", icon: "point.3.connected.trianglepath.dotted") {
+                            VStack(spacing: 10) {
+                                ForEach(component.pinout) { pin in
+                                    HStack(alignment: .top, spacing: 10) {
+                                        Text(pin.pin)
+                                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+                                            .foregroundColor(.black)
+                                            .padding(.horizontal, 6)
+                                            .padding(.vertical, 3)
+                                            .background(neonCyan)
+                                            .cornerRadius(4)
+                                        
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(pin.label)
+                                                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                                .foregroundColor(.white)
+                                            Text(pin.description)
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .foregroundColor(.gray)
+                                                .lineSpacing(2)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // How to Connect
+                        DetailSection(title: "HOW TO CONNECT", icon: "cable.connector") {
+                            VStack(alignment: .leading, spacing: 0) {
+                                let steps = component.connectionGuide.components(separatedBy: "\n")
+                                ForEach(steps.indices, id: \.self) { i in
+                                    if !steps[i].trimmingCharacters(in: .whitespaces).isEmpty {
+                                        HStack(alignment: .top, spacing: 10) {
+                                            if steps[i].hasPrefix("⚠️") {
+                                                Text(steps[i])
+                                                    .font(.system(size: 12, design: .monospaced))
+                                                    .foregroundColor(.orange)
+                                                    .lineSpacing(3)
+                                            } else {
+                                                Text(steps[i])
+                                                    .font(.system(size: 12, design: .monospaced))
+                                                    .foregroundColor(.white.opacity(0.85))
+                                                    .lineSpacing(3)
+                                            }
+                                        }
+                                        .padding(.bottom, 6)
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Related Components
+                        if !component.relatedComponents.isEmpty {
+                            DetailSection(title: "PAIRS WELL WITH", icon: "link.circle.fill") {
+                                FlowLayout(items: component.relatedComponents) { item in
+                                    Text(item)
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        .foregroundColor(neonCyan)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(neonCyan.opacity(0.1))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(neonCyan.opacity(0.3), lineWidth: 0.5)
+                                        )
+                                        .cornerRadius(8)
+                                }
+                            }
+                        }
+                        
+                        Spacer().frame(height: 40)
+                    }
+                    .padding(20)
+                }
+            }
+            
+            // Close button
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(neonCyan)
+                            .shadow(color: neonCyan.opacity(0.4), radius: 8)
+                    }
+                    .padding(16)
                 }
                 Spacer()
             }
-            
-            Text(component.description)
-                .font(.system(size: 12, weight: .regular, design: .monospaced))
-                .foregroundColor(.white.opacity(0.8))
-                .padding(.top, 4)
         }
-        .padding(12)
-        .background(
-            VisualEffectBlur(blurStyle: .systemUltraThinMaterialDark) {
-                Rectangle().fill(Color.clear)
+        .preferredColorScheme(.dark)
+    }
+}
+
+@available(iOS 16.0, *)
+struct DetailSection<Content: View>: View {
+    let title: String
+    let icon: String
+    @ViewBuilder let content: Content
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(neonCyan)
+                Text(title)
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundColor(neonCyan)
             }
-            .opacity(0.85)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(neonCyan.opacity(0.15), lineWidth: 0.5)
-        )
-        .padding(.horizontal, 16)
+            
+            VStack(alignment: .leading) {
+                content
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.03))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(neonCyan.opacity(0.12), lineWidth: 0.5)
+            )
+            .cornerRadius(12)
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+struct FlowLayout<Item: Hashable, Content: View>: View {
+    let items: [Item]
+    let content: (Item) -> Content
+    
+    var body: some View {
+        GeometryReader { geo in
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(buildRows(maxWidth: geo.size.width), id: \.self) { row in
+                    HStack(spacing: 8) {
+                        ForEach(row, id: \.self) { item in
+                            content(item)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(minHeight: 40)
+    }
+    
+    private func buildRows(maxWidth: CGFloat) -> [[Item]] {
+        var rows: [[Item]] = [[]]
+        var currentWidth: CGFloat = 0
+        let itemWidth: CGFloat = 120
+        let spacing: CGFloat = 8
+        
+        for item in items {
+            if currentWidth + itemWidth + spacing > maxWidth && !rows[rows.count - 1].isEmpty {
+                rows.append([])
+                currentWidth = 0
+            }
+            rows[rows.count - 1].append(item)
+            currentWidth += itemWidth + spacing
+        }
+        return rows
     }
 }
 #endif

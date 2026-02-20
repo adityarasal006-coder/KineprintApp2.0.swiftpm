@@ -1,14 +1,29 @@
 #if os(iOS)
 import SwiftUI
+import AudioToolbox
+import AVFoundation
 
 @available(iOS 16.0, *)
 struct OnboardingView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var currentPage = 0
     @State private var nameInput = ""
+    @State private var showGreeting = false
+    @State private var greetingText = ""
     @Environment(\.dismiss) var dismiss
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    private var timeBasedGreeting: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        if hour >= 1 && hour < 12 {
+            return "Good Morning"      // 1:00 AM – 11:59 AM
+        } else if hour >= 12 && hour < 16 {
+            return "Good Afternoon"    // 12:00 PM – 3:59 PM
+        } else {
+            return "Good Evening"      // 4:00 PM – 12:59 AM
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -33,18 +48,35 @@ struct OnboardingView: View {
                 Spacer()
                 
                 TabView(selection: $currentPage) {
-                    // Card 1: Identity - explain that Kineprint turns the device into a real-time kinematic lab
+                    // Card 1: Identity - Kinematic Lab with gear icon
                     VStack(spacing: 24) {
-                        Image(systemName: "scissors")
-                            .font(.system(size: 60))
-                            .foregroundColor(neonCyan)
-                            .shadow(color: neonCyan.opacity(0.5), radius: 10)
+                        ZStack {
+                            // Outer pulsing ring
+                            Circle()
+                                .stroke(neonCyan.opacity(0.15), lineWidth: 3)
+                                .frame(width: 130, height: 130)
+                            
+                            Circle()
+                                .stroke(neonCyan.opacity(0.25), lineWidth: 2)
+                                .frame(width: 110, height: 110)
+                            
+                            // Inner glow circle
+                            Circle()
+                                .fill(neonCyan.opacity(0.08))
+                                .frame(width: 100, height: 100)
+                            
+                            // Gear icon — represents kinematics/engineering
+                            Image(systemName: "gearshape.2.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(neonCyan)
+                                .shadow(color: neonCyan.opacity(0.6), radius: 15)
+                        }
                         
                         Text("KINEMATIC LAB")
                             .font(.system(size: 24, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                         
-                        Text("Transform your device into a real-time mechanical diagnostic tool")
+                        Text("Transform your device into a real-time mechanical diagnostic tool for engineering")
                             .font(.system(size: 14, design: .monospaced))
                             .multilineTextAlignment(.center)
                             .foregroundColor(.gray)
@@ -52,27 +84,41 @@ struct OnboardingView: View {
                     }
                     .tag(0)
                     
-                    // Card 2: How Tracking Works - briefly explain LiDAR motion tracking in simple student language
-                    OnboardingSlide(
-                        icon: "lidar.topography",
-                        title: "LIDAR TRACKING",
-                        description: "LiDAR scans your environment to create precise 3D maps for accurate motion tracking.",
-                        color: neonCyan
-                    )
+                    // Card 2: LiDAR Tracking with animated scan rings
+                    VStack(spacing: 24) {
+                        LiDARScanIcon(color: neonCyan)
+                        
+                        Text("LIDAR TRACKING")
+                            .font(.system(size: 24, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                        
+                        Text("LiDAR scans your environment to create precise 3D maps for accurate motion tracking.")
+                            .font(.system(size: 14, design: .monospaced))
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.gray)
+                            .padding(.horizontal, 40)
+                            .lineSpacing(4)
+                    }
                     .tag(1)
                     
-                    // Card 3: Buddy Setup - user chooses preferred name, assistant style (quiet or guided), measurement units
+                    // Card 3: Buddy Setup — name only, with SAVE button
                     VStack(spacing: 24) {
-                        Image(systemName: "person.crop.circle")
-                            .font(.system(size: 60))
-                            .foregroundColor(neonCyan)
-                            .shadow(color: neonCyan.opacity(0.5), radius: 10)
+                        ZStack {
+                            Circle()
+                                .fill(neonCyan.opacity(0.08))
+                                .frame(width: 100, height: 100)
+                            
+                            Image(systemName: "person.crop.circle.badge.checkmark")
+                                .font(.system(size: 55))
+                                .foregroundColor(neonCyan)
+                                .shadow(color: neonCyan.opacity(0.5), radius: 10)
+                        }
                         
                         Text("BUDDY SETUP")
                             .font(.system(size: 24, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                         
-                        Text("Choose your preferred name and assistant style")
+                        Text("Enter your name to get started")
                             .font(.system(size: 14, design: .monospaced))
                             .multilineTextAlignment(.center)
                             .foregroundColor(.gray)
@@ -92,81 +138,54 @@ struct OnboardingView: View {
                             )
                             .foregroundColor(neonCyan)
                             .padding(.horizontal, 60)
-                            .textInputAutocapitalization(.characters)
-                        
-                        // Assistant style picker
-                        HStack {
-                            Text("ASSISTANCE")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
-                            
-                            Picker("Assistance", selection: $viewModel.assistantStyle) {
-                                Text("Quiet").tag(AssistantStyle.quiet)
-                                Text("Guided").tag(AssistantStyle.guided)
+                            .textInputAutocapitalization(.words)
+                            .onSubmit {
+                                saveName()
                             }
-                            .pickerStyle(.segmented)
-                            .scaleEffect(0.9)
-                        }
-                        .padding(.horizontal, 40)
                         
-                        // Units picker
-                        HStack {
-                            Text("UNITS")
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
-                            
-                            Picker("Units", selection: $viewModel.measurementUnits) {
-                                Text("Metric").tag(MeasurementUnits.metric)
-                                Text("Imperial").tag(MeasurementUnits.imperial)
+                        // SAVE button for mobile
+                        Button(action: {
+                            saveName()
+                        }) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 18))
+                                Text("SAVE")
+                                    .font(.system(size: 16, weight: .bold, design: .monospaced))
                             }
-                            .pickerStyle(.segmented)
-                            .scaleEffect(0.9)
+                            .foregroundColor(nameInput.isEmpty ? .gray : .black)
+                            .padding(.vertical, 14)
+                            .padding(.horizontal, 50)
+                            .background(nameInput.isEmpty ? Color.gray.opacity(0.3) : neonCyan)
+                            .cornerRadius(12)
+                            .shadow(color: nameInput.isEmpty ? .clear : neonCyan.opacity(0.4), radius: 10)
                         }
-                        .padding(.horizontal, 40)
+                        .disabled(nameInput.isEmpty)
+                        .animation(.easeInOut, value: nameInput.isEmpty)
                     }
                     .tag(2)
                     
-                    // Card 4: Permissions - request Camera, LiDAR, and Motion access with strong CTA
+                    // Card 4: Permissions
                     VStack(spacing: 24) {
-                        Image(systemName: "camera.aperture")
-                            .font(.system(size: 60))
-                            .foregroundColor(neonCyan)
-                            .shadow(color: neonCyan.opacity(0.5), radius: 10)
+                        ZStack {
+                            Circle()
+                                .fill(neonCyan.opacity(0.08))
+                                .frame(width: 100, height: 100)
+                            
+                            Image(systemName: "camera.aperture")
+                                .font(.system(size: 50))
+                                .foregroundColor(neonCyan)
+                                .shadow(color: neonCyan.opacity(0.5), radius: 10)
+                        }
                         
                         Text("PRIVACY NOTICE")
                             .font(.system(size: 24, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                         
                         VStack(spacing: 10) {
-                            HStack(alignment: .top) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.system(size: 12))
-                                    .padding(.top, 2)
-                                Text("Camera access for AR scanning")
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            HStack(alignment: .top) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.system(size: 12))
-                                    .padding(.top, 2)
-                                Text("Motion sensors for tracking")
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.gray)
-                            }
-                            
-                            HStack(alignment: .top) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.green)
-                                    .font(.system(size: 12))
-                                    .padding(.top, 2)
-                                Text("LiDAR for precise mapping")
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundColor(.gray)
-                            }
+                            PermissionRow(text: "Camera access for AR scanning")
+                            PermissionRow(text: "Motion sensors for tracking")
+                            PermissionRow(text: "LiDAR for precise mapping")
                         }
                         .padding(.horizontal, 40)
                         
@@ -204,40 +223,131 @@ struct OnboardingView: View {
                     .foregroundColor(neonCyan.opacity(0.4))
                     .padding(.bottom, 20)
             }
+            
+            // Greeting overlay
+            if showGreeting {
+                Color.black.opacity(0.8)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                
+                VStack(spacing: 16) {
+                    Image(systemName: "hand.wave.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(neonCyan)
+                        .shadow(color: neonCyan.opacity(0.6), radius: 15)
+                    
+                    Text(greetingText)
+                        .font(.system(size: 26, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                        .multilineTextAlignment(.center)
+                    
+                    Text(nameInput.uppercased())
+                        .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+                .scaleEffect(showGreeting ? 1.0 : 0.5)
+                .opacity(showGreeting ? 1.0 : 0)
+                .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: showGreeting)
+    }
+    
+    private func saveName() {
+        guard !nameInput.isEmpty else { return }
+        
+        // Play a chime sound
+        AudioServicesPlaySystemSound(1054)
+        
+        // Show time-based greeting
+        greetingText = timeBasedGreeting + ","
+        showGreeting = true
+        
+        // Speak greeting aloud
+        speakGreeting()
+        
+        // Auto-advance to permissions page after 2 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            showGreeting = false
+            withAnimation(.easeInOut(duration: 0.5)) {
+                currentPage = 3
+            }
+        }
+    }
+    
+    private func speakGreeting() {
+        let synthesizer = AVSpeechSynthesizer()
+        let name = nameInput.trimmingCharacters(in: .whitespaces)
+        let greeting = timeBasedGreeting
+        let text = "\(greeting), \(name)! Welcome to KinePrint. We are waiting for you to come back again!"
+        let utterance = AVSpeechUtterance(string: text)
+        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
+        utterance.pitchMultiplier = 1.1
+        utterance.rate = 0.50
+        utterance.volume = 0.9
+        synthesizer.speak(utterance)
+    }
+}
+
+// MARK: - Animated LiDAR Scan Icon
+
+@available(iOS 16.0, *)
+struct LiDARScanIcon: View {
+    let color: Color
+    @State private var isAnimating = false
+    
+    var body: some View {
+        ZStack {
+            // Animated scan rings
+            ForEach(0..<3) { i in
+                Circle()
+                    .stroke(color.opacity(isAnimating ? 0.0 : 0.3), lineWidth: 2)
+                    .frame(width: isAnimating ? 180 : 80, height: isAnimating ? 180 : 80)
+                    .animation(
+                        .easeOut(duration: 2.0)
+                        .repeatForever(autoreverses: false)
+                        .delay(Double(i) * 0.6),
+                        value: isAnimating
+                    )
+            }
+            
+            // Static outer ring
+            Circle()
+                .stroke(color.opacity(0.2), lineWidth: 20)
+                .frame(width: 120, height: 120)
+            
+            // Inner glow
+            Circle()
+                .fill(color.opacity(0.08))
+                .frame(width: 90, height: 90)
+            
+            // LiDAR icon
+            Image(systemName: "sensor.tag.radiowaves.forward.fill")
+                .font(.system(size: 40))
+                .foregroundColor(color)
+                .shadow(color: color.opacity(0.6), radius: 12)
+        }
+        .onAppear {
+            isAnimating = true
         }
     }
 }
 
+// MARK: - Permission Row
+
 @available(iOS 16.0, *)
-struct OnboardingSlide: View {
-    let icon: String
-    let title: String
-    let description: String
-    let color: Color
+struct PermissionRow: View {
+    let text: String
     
     var body: some View {
-        VStack(spacing: 24) {
-            ZStack {
-                Circle()
-                    .stroke(color.opacity(0.2), lineWidth: 20)
-                    .frame(width: 120, height: 120)
-                
-                Image(systemName: icon)
-                    .font(.system(size: 50))
-                    .foregroundColor(color)
-                    .shadow(color: color.opacity(0.5), radius: 10)
-            }
-            
-            Text(title)
-                .font(.system(size: 24, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-            
-            Text(description)
-                .font(.system(size: 14, design: .monospaced))
-                .multilineTextAlignment(.center)
+        HStack(alignment: .top) {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+                .font(.system(size: 12))
+                .padding(.top, 2)
+            Text(text)
+                .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.gray)
-                .padding(.horizontal, 40)
-                .lineSpacing(4)
         }
     }
 }
