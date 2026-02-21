@@ -31,6 +31,11 @@ let package = Package(
                 .landscapeRight,
                 .landscapeLeft,
                 .portraitUpsideDown(.when(deviceFamilies: [.pad]))
+            ],
+            capabilities: [
+                .camera(purposeString: "Kineprint uses the camera for offline augmented reality and motion tracking."),
+                .microphone(purposeString: "Kineprint uses the microphone for offline spatial audio processing."),
+                .motion(purposeString: "Kineprint uses sensors for offline motion tracking and spatial awareness.")
             ]
         )
     ],
@@ -40,5 +45,5 @@ let package = Package(
             path: "."
         )
     ],
-    swiftLanguageVersions: [.v5]
+    swiftLanguageModes: [.v5]
 )

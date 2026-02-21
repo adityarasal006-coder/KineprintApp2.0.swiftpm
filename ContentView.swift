@@ -67,7 +67,7 @@ struct KineprintView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     
-                    CustomBottomToolbar(selectedTab: $selectedTab, startARAnimation: {
+                    CustomBottomToolbar(viewModel: viewModel, selectedTab: $selectedTab, startARAnimation: {
                         showingARAnimation = true
                     })
                 }
@@ -181,6 +181,11 @@ struct ARScannerTab: View {
             ARCameraView(viewModel: viewModel)
             
             VStack(spacing: 0) {
+                // Top section: Motion Analysis relocated safely out of the way
+                MotionAnalysisDashboard(viewModel: viewModel)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                
                 if viewModel.isScanning {
                     ScanningLine()
                 }
@@ -195,30 +200,9 @@ struct ARScannerTab: View {
                         .padding(.bottom, 16)
                 }
                 
-                // Bottom section: capture button and dashboard
-                VStack(spacing: 16) {
-                    // Central capture button
-                    Button(action: {
-                        viewModel.captureBlueprintImage()
-                    }) {
-                        ZStack {
-                            Circle()
-                                .stroke(Color(red: 0, green: 1, blue: 0.85), lineWidth: 4)
-                                .frame(width: 72, height: 72)
-                            Circle()
-                                .fill(Color(red: 0, green: 1, blue: 0.85).opacity(0.3))
-                                .frame(width: 60, height: 60)
-                            Image(systemName: "camera.viewfinder")
-                                .font(.system(size: 28, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .padding(.bottom, 8)
-                    
-                    BottomDashboard(viewModel: viewModel)
-                        .padding(.horizontal, 12)
-                }
-                .padding(.bottom, 8)
+                // Bottom section: ONLY capture button so it lowers naturally
+                // The capture button has been naturally migrated to the main tab bar 
+                // See `CustomBottomToolbar`
             }
             
             // Hacker Processing state
@@ -239,6 +223,7 @@ struct ARScannerTab: View {
 
 @available(iOS 16.0, *)
 struct CustomBottomToolbar: View {
+    @ObservedObject var viewModel: KineprintViewModel
     @Binding var selectedTab: AppTab
     var startARAnimation: () -> Void
     
@@ -250,7 +235,9 @@ struct CustomBottomToolbar: View {
             TabBarButton(icon: "network", label: "IOT HUB", tab: .iot, selectedTab: $selectedTab)
             
             Button(action: {
-                if selectedTab != .ar {
+                if selectedTab == .ar {
+                    viewModel.captureBlueprintImage()
+                } else {
                     startARAnimation()
                 }
             }) {
@@ -261,7 +248,7 @@ struct CustomBottomToolbar: View {
                     Circle()
                         .stroke(neonCyan, lineWidth: selectedTab == .ar ? 3 : 1)
                         .frame(width: 60, height: 60)
-                    Image(systemName: "arkit")
+                    Image(systemName: selectedTab == .ar ? "camera.viewfinder" : "arkit")
                         .font(.system(size: 28, weight: .bold))
                         .foregroundColor(neonCyan)
                 }
@@ -874,7 +861,7 @@ struct ControlButton: View {
 // MARK: - Bottom Dashboard (Real-Time Physics Charts)
 
 @available(iOS 16.0, *)
-struct BottomDashboard: View {
+struct MotionAnalysisDashboard: View {
     @ObservedObject var viewModel: KineprintViewModel
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
@@ -949,14 +936,14 @@ struct BottomDashboard: View {
                             .foregroundStyle(.gray)
                     }
                 }
-                .frame(height: 90)
+                .frame(height: 50)
                 .padding(.horizontal, 8)
             } else {
                 // Empty state
                 ZStack {
                     Rectangle()
                         .fill(Color.clear)
-                        .frame(height: 90)
+                        .frame(height: 50)
                     
                     VStack(spacing: 4) {
                         Image(systemName: "hand.tap")
@@ -1059,6 +1046,7 @@ struct ResearchEntry: Identifiable, Codable {
     let blueprintData: String // Simulated blueprint string
     let mass: String
     let scanQuality: String
+    var imagePath: String? = nil
 }
 
 @available(iOS 16.0, *)
@@ -1089,6 +1077,8 @@ class KineprintViewModel: ObservableObject {
     // New processing states
     @Published var isHackerProcessing = false
     @Published var showCapturedBlueprint = false
+    
+    var onCaptureBlueprint: (() -> UIImage?)? = nil
     
     // Personalization & State
     @AppStorage("userName") var userName: String = ""
@@ -1316,12 +1306,15 @@ class KineprintViewModel: ObservableObject {
         generator.impactOccurred()
         #endif
         
+        // Take snapshot immediately
+        let snapshot = onCaptureBlueprint?()
+        
         isHackerProcessing = true
         showCapturedBlueprint = false
         
-        // Let processing animation run for ~4 seconds, then show blueprint
-        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
-            self.generateBlueprintResult()
+        // Let processing animation run for ~2.5 seconds, then show blueprint
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+            self.generateBlueprintResult(image: snapshot)
             withAnimation(.easeOut(duration: 0.5)) {
                 self.isHackerProcessing = false
                 self.showCapturedBlueprint = true
@@ -1329,20 +1322,39 @@ class KineprintViewModel: ObservableObject {
         }
     }
     
-    private func generateBlueprintResult() {
-        // Form a detailed research entry
-        let materials = ["Titanium-Carbon Blend", "Polylactic Acid (PLA)", "AISI 304 Stainless Steel", "High-Density Polyethylene"]
-        let names = ["ARCHETYPE-01", "KINETIC_CORE", "PROTOTYPE-X", "VESSEL_STRUCT"]
+    private func saveImageLocally(_ image: UIImage, id: UUID) -> String? {
+        guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
+        let filename = getDocumentsDirectory().appendingPathComponent("\(id.uuidString).jpg")
+        try? data.write(to: filename)
+        return filename.path
+    }
+    
+    private func getDocumentsDirectory() -> URL {
+        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
+        return paths[0]
+    }
+    
+    private func generateBlueprintResult(image: UIImage?) {
+        // Form a detailed research entry focusing on organic and physical world assets
+        let materials = ["Biological Matrix (Carbon-based)", "Synthetic Polymer Composite", "High-Density Organic Fiber", "Silicon-infused Fabric", "Titanium Alloy Skeleton", "Carbon Fiber Mesh"]
+        let names = ["HOMINID_SUBJECT-01", "ORGANIC_ASSET", "SYNTHETIC_OBJECT", "UNKNOWN_RELIQUARY", "MECHANICAL_CONSTRUCT", "BIOSYNTHETIC_ENTITY"]
+        
+        let newId = UUID()
+        var savedPath: String? = nil
+        if let img = image {
+            savedPath = saveImageLocally(img, id: newId)
+        }
         
         let newEntry = ResearchEntry(
-            id: UUID(),
+            id: newId,
             date: Date(),
             title: names.randomElement() ?? "UNKNOWN_STRUCT",
-            dimensions: "\(Double.random(in: 12...80).formatted(.number.precision(.fractionLength(1))))W x \(Double.random(in: 5...40).formatted(.number.precision(.fractionLength(1))))H x \(Double.random(in: 10...30).formatted(.number.precision(.fractionLength(1))))D cm",
-            material: materials.randomElement() ?? "Synthetic Alloy",
-            blueprintData: "RAW_BLUEPRINT_VECTOR_\(UUID().uuidString.prefix(8))",
-            mass: "\(Double.random(in: 0.1...15.0).formatted(.number.precision(.fractionLength(2)))) kg",
-            scanQuality: "99.8% PRECISION"
+            dimensions: "\(Double.random(in: 40...190).formatted(.number.precision(.fractionLength(4))))W x \(Double.random(in: 10...80).formatted(.number.precision(.fractionLength(4))))H cm",
+            material: materials.randomElement() ?? "Organic-Synthetic Hybrid",
+            blueprintData: "RAW_BLUEPRINT_VECTOR_\(UUID().uuidString.prefix(12))",
+            mass: "\(Double.random(in: 2.0...85.0).formatted(.number.precision(.fractionLength(3)))) kg",
+            scanQuality: "\(Double.random(in: 99.4...99.99).formatted(.number.precision(.fractionLength(2))))% METRIC PRECISION",
+            imagePath: savedPath
         )
         
         // Prepend to show at top

@@ -962,213 +962,181 @@ struct ComponentCardView: View {
 struct ComponentDetailView: View {
     let component: IoTComponent
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    private let starkWhite = Color(red: 0.9, green: 0.95, blue: 1.0)
     @Environment(\.dismiss) var dismiss
+    
+    @State private var rotatingAngle: Double = 0
+    @State private var lineProgress: CGFloat = 0.0
+    @State private var textOpacity: Double = 0.0
     
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color(red: 0.02, green: 0.08, blue: 0.15).ignoresSafeArea()
+            EngineeringGridBackground(cyanColor: neonCyan)
+                .opacity(0.4)
+                .ignoresSafeArea()
             
-            // Background grid
-            GeometryReader { geo in
-                ForEach(0..<12) { i in
-                    Path { path in
-                        path.move(to: CGPoint(x: 0, y: geo.size.height / 12 * CGFloat(i)))
-                        path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 12 * CGFloat(i)))
+            VStack(spacing: 0) {
+                // Header Map
+                HStack {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(neonCyan)
                     }
-                    .stroke(neonCyan.opacity(0.07), lineWidth: 0.5)
+                    Spacer()
+                    Text("COMPONENT_ANALYSIS")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan.opacity(0.8))
+                    Spacer()
+                    Image(systemName: "cpu")
+                        .foregroundColor(neonCyan)
                 }
-            }
-            .ignoresSafeArea()
-            
-            ScrollView {
-                VStack(spacing: 0) {
-                    // Hero section with component image
-                    ZStack {
-                        // Glow circles
-                        Circle()
-                            .fill(neonCyan.opacity(0.04))
-                            .frame(width: 200, height: 200)
-                        Circle()
-                            .stroke(neonCyan.opacity(0.1), lineWidth: 1)
-                            .frame(width: 160, height: 160)
-                        Circle()
-                            .stroke(neonCyan.opacity(0.15), lineWidth: 2)
-                            .frame(width: 120, height: 120)
-                        Circle()
-                            .fill(neonCyan.opacity(0.08))
-                            .frame(width: 100, height: 100)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 10)
+                
+                ScrollView {
+                    VStack(spacing: 40) {
                         
-                        if let path = Bundle.main.path(forResource: component.componentImageName, ofType: "png"),
-                           let uiImage = UIImage(contentsOfFile: path) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 120, height: 120)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                                .shadow(color: neonCyan.opacity(0.5), radius: 15)
-                        } else if let uiImage = UIImage(named: component.componentImageName) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 120, height: 120)
-                                .clipShape(RoundedRectangle(cornerRadius: 16))
-                                .shadow(color: neonCyan.opacity(0.5), radius: 15)
-                        } else {
-                            Image(systemName: component.iconName)
-                                .font(.system(size: 52))
-                                .foregroundColor(neonCyan)
-                                .shadow(color: neonCyan.opacity(0.6), radius: 20)
-                        }
-                    }
-                    .frame(height: 220)
-                    .frame(maxWidth: .infinity)
-                    .background(
-                        LinearGradient(
-                            colors: [neonCyan.opacity(0.05), Color.black],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    
-                    VStack(alignment: .leading, spacing: 24) {
-                        // Name & category
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(component.name)
-                                .font(.system(size: 26, weight: .heavy, design: .monospaced))
-                                .foregroundColor(.white)
-                            Text(component.category.rawValue.uppercased())
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundColor(neonCyan)
-                        }
-                        
-                        // Description
-                        Text(component.description)
-                            .font(.system(size: 14, design: .monospaced))
-                            .foregroundColor(.gray)
-                            .lineSpacing(4)
-                        
-                        // Use Case
-                        DetailSection(title: "USE CASE", icon: "lightbulb.fill") {
-                            Text(component.useCase)
-                                .font(.system(size: 13, design: .monospaced))
-                                .foregroundColor(.white.opacity(0.85))
-                                .lineSpacing(3)
-                        }
-                        
-                        // Specifications
-                        DetailSection(title: "SPECIFICATIONS", icon: "list.bullet.clipboard.fill") {
-                            VStack(spacing: 8) {
-                                ForEach(component.specs.sorted(by: { $0.key < $1.key }), id: \.key) { key, value in
-                                    HStack(alignment: .top) {
-                                        Text(key)
-                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                            .foregroundColor(.gray)
-                                            .frame(width: 130, alignment: .leading)
-                                        Text(value)
-                                            .font(.system(size: 11, design: .monospaced))
-                                            .foregroundColor(.white)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
+                        // Holographic Arc Reactor Core representation
+                        ZStack {
+                            Circle()
+                                .stroke(neonCyan.opacity(0.3), lineWidth: 1)
+                                .frame(width: 260, height: 260)
+                            
+                            Circle()
+                                .stroke(neonCyan.opacity(0.5), style: StrokeStyle(lineWidth: 2, dash: [10, 5]))
+                                .frame(width: 240, height: 240)
+                                .rotationEffect(.degrees(rotatingAngle))
+                            
+                            Circle()
+                                .trim(from: 0, to: lineProgress)
+                                .stroke(starkWhite, lineWidth: 4)
+                                .frame(width: 220, height: 220)
+                                .rotationEffect(.degrees(-90))
+                            
+                            // Technical diagram lines
+                            Path { path in
+                                path.move(to: CGPoint(x: 130, y: 0))
+                                path.addLine(to: CGPoint(x: 130, y: 260))
+                                path.move(to: CGPoint(x: 0, y: 130))
+                                path.addLine(to: CGPoint(x: 260, y: 130))
+                            }
+                            .trim(from: 0, to: lineProgress)
+                            .stroke(neonCyan.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                            .frame(width: 260, height: 260)
+                            
+                            // Core Geometry (Image)
+                            if let path = Bundle.main.path(forResource: component.componentImageName, ofType: "png"),
+                               let uiImage = UIImage(contentsOfFile: path) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 140, height: 140)
+                                    .clipShape(Circle())
+                                    .colorMultiply(neonCyan) // Holographic effect
+                                    .opacity(textOpacity)
+                                    .shadow(color: neonCyan, radius: 20)
+                            } else if let uiImage = UIImage(named: component.componentImageName) {
+                                Image(uiImage: uiImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 140, height: 140)
+                                    .clipShape(Circle())
+                                    .colorMultiply(neonCyan)
+                                    .opacity(textOpacity)
+                                    .shadow(color: neonCyan, radius: 20)
+                            } else {
+                                Image(systemName: component.iconName)
+                                    .font(.system(size: 60))
+                                    .foregroundColor(neonCyan)
+                                    .opacity(textOpacity)
+                                    .shadow(color: neonCyan, radius: 20)
+                            }
+                            
+                            // Data Nodes Bridging Out
+                            if textOpacity > 0.5 {
+                                VStack(spacing: 210) {
+                                    HStack {
+                                        BlueprintDataNode(title: "ID", val1: String(component.name.prefix(12)), val2: component.category.rawValue.uppercased(), color: neonCyan)
+                                        Spacer()
+                                        BlueprintDataNode(title: "SPEC", val1: "PINS: \(component.pinout.count)", val2: "STATUS: ACTIVE", color: neonCyan)
                                     }
-                                    if key != component.specs.sorted(by: { $0.key < $1.key }).last?.key {
-                                        Divider().background(neonCyan.opacity(0.1))
+                                    HStack {
+                                        BlueprintDataNode(title: "USE CASE", val1: "ANALYSIS", val2: "OP: NORMAL", color: neonCyan)
+                                        Spacer()
+                                        BlueprintDataNode(title: "PWR", val1: "VOLTAGE: 3.3V/5V", val2: "DRAW: NOMINAL", color: neonCyan)
                                     }
                                 }
+                                .padding(.horizontal, 20)
+                                .transition(.scale.combined(with: .opacity))
                             }
                         }
+                        .frame(height: 300)
                         
-                        // Pin Connections
-                        DetailSection(title: "PIN CONNECTIONS", icon: "point.3.connected.trianglepath.dotted") {
-                            VStack(spacing: 10) {
-                                ForEach(component.pinout) { pin in
-                                    HStack(alignment: .top, spacing: 10) {
-                                        Text(pin.pin)
-                                            .font(.system(size: 10, weight: .heavy, design: .monospaced))
-                                            .foregroundColor(.black)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 3)
-                                            .background(neonCyan)
-                                            .cornerRadius(4)
-                                        
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(pin.label)
-                                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                                .foregroundColor(.white)
-                                            Text(pin.description)
-                                                .font(.system(size: 11, design: .monospaced))
-                                                .foregroundColor(.gray)
-                                                .lineSpacing(2)
-                                        }
-                                    }
-                                }
+                        // Remaining details below as blueprint panels
+                        VStack(spacing: 16) {
+                            BlueprintPanel(title: "PROTOCOL DESCRIPTION", content: component.description, color: neonCyan)
+                            
+                            if !component.pinout.isEmpty {
+                                let pinsString = component.pinout.map { "\($0.pin) -> \($0.label)" }.joined(separator: "\n")
+                                BlueprintPanel(title: "TERMINAL MAPPING (PINS)", content: pinsString, color: neonCyan)
                             }
+                            
+                            BlueprintPanel(title: "INTEGRATION DIRECTIVES", content: component.connectionGuide, color: neonCyan)
                         }
-                        
-                        // How to Connect
-                        DetailSection(title: "HOW TO CONNECT", icon: "cable.connector") {
-                            VStack(alignment: .leading, spacing: 0) {
-                                let steps = component.connectionGuide.components(separatedBy: "\n")
-                                ForEach(steps.indices, id: \.self) { i in
-                                    if !steps[i].trimmingCharacters(in: .whitespaces).isEmpty {
-                                        HStack(alignment: .top, spacing: 10) {
-                                            if steps[i].hasPrefix("⚠️") {
-                                                Text(steps[i])
-                                                    .font(.system(size: 12, design: .monospaced))
-                                                    .foregroundColor(.orange)
-                                                    .lineSpacing(3)
-                                            } else {
-                                                Text(steps[i])
-                                                    .font(.system(size: 12, design: .monospaced))
-                                                    .foregroundColor(.white.opacity(0.85))
-                                                    .lineSpacing(3)
-                                            }
-                                        }
-                                        .padding(.bottom, 6)
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Related Components
-                        if !component.relatedComponents.isEmpty {
-                            DetailSection(title: "PAIRS WELL WITH", icon: "link.circle.fill") {
-                                FlowLayout(items: component.relatedComponents) { item in
-                                    Text(item)
-                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                        .foregroundColor(neonCyan)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 5)
-                                        .background(neonCyan.opacity(0.1))
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(neonCyan.opacity(0.3), lineWidth: 0.5)
-                                        )
-                                        .cornerRadius(8)
-                                }
-                            }
-                        }
+                        .padding(.horizontal, 20)
+                        .opacity(textOpacity)
                         
                         Spacer().frame(height: 40)
                     }
-                    .padding(20)
+                    .padding(.top, 30)
                 }
-            }
-            
-            // Close button
-            VStack {
-                HStack {
-                    Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(neonCyan)
-                            .shadow(color: neonCyan.opacity(0.4), radius: 8)
-                    }
-                    .padding(16)
-                }
-                Spacer()
             }
         }
-        .preferredColorScheme(.dark)
+        .onAppear {
+            lineProgress = 0.0
+            withAnimation(.linear(duration: 15).repeatForever(autoreverses: false)) {
+                rotatingAngle = 360
+            }
+            withAnimation(.easeInOut(duration: 1.5)) {
+                lineProgress = 1.0
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                    textOpacity = 1.0
+                }
+            }
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+struct BlueprintPanel: View {
+    let title: String
+    let content: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(color)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(color.opacity(0.2))
+                .border(color.opacity(0.5), width: 1)
+            
+            Text(content)
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.white.opacity(0.85))
+                .lineSpacing(4)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.black.opacity(0.3))
+                .border(color.opacity(0.3), width: 1)
+        }
     }
 }
 

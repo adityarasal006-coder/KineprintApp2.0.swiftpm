@@ -5,154 +5,244 @@ import SwiftUI
 struct HomeDashboardView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var showingResearch = false
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    @State private var radarRotation: Double = 0
+    
+    private let draftBlue = Color(red: 0.02, green: 0.08, blue: 0.15)
+    private let neonCyan = Color(red: 0.0, green: 0.85, blue: 1.0)
+    private let starkWhite = Color(red: 0.9, green: 0.95, blue: 1.0)
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 24) {
-                // Intro header
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("SYSTEM OVERVIEW")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(.gray)
-                        Text("KINETIC ENGINEERING")
-                            .font(.system(size: 24, weight: .bold, design: .monospaced))
-                            .foregroundColor(neonCyan)
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-
-                // Featured Card (Explanation of the Theme)
-                VStack(alignment: .leading, spacing: 12) {
+        ZStack {
+            draftBlue.ignoresSafeArea()
+            EngineeringGridBackground(cyanColor: neonCyan)
+                .opacity(0.4)
+            
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Header
                     HStack {
-                        Image(systemName: "cpu")
-                            .foregroundColor(neonCyan)
-                        Text("ABOUT KINEPRINT")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(.white)
-                    }
-                    Text("Kineprint is an advanced engineering tool focused on real-time kinematic printing principles. It allows operatives to analyze physical motion with LiDAR, interface with IoT components via Bluetooth, and train in kinetic concepts.")
-                        .font(.system(size: 14, weight: .regular, design: .monospaced))
-                        .foregroundColor(.gray)
-                        .lineSpacing(4)
-                }
-                .padding()
-                .background(Color.black.opacity(0.4))
-                .cornerRadius(12)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(neonCyan.opacity(0.15), lineWidth: 1)
-                )
-                .padding(.horizontal, 20)
-
-                // Quick Stats / Summary
-                HStack(spacing: 16) {
-                    MetricCardView(title: "SENSORS", value: "8", icon: "sensor.tag.radiowaves.forward")
-                    MetricCardView(title: "MODELS", value: "3D", icon: "cube.transparent.fill")
-                }
-                .padding(.horizontal, 20)
-                
-                // Research Folder Link
-                Button(action: { showingResearch = true }) {
-                    HStack {
-                        Image(systemName: "folder.fill.badge.gearshape")
-                            .font(.system(size: 24))
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("RESEARCH FOLDER")
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            Text("\(viewModel.researchEntries.count) OBJECTS SCAN LOGGED")
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("NODE TERMINAL")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(neonCyan.opacity(0.8))
+                            Text("KINEPRINT_HUB")
+                                .font(.system(size: 24, weight: .heavy, design: .monospaced))
+                                .foregroundColor(starkWhite)
+                            Text("WELCOME, \(viewModel.userName.uppercased())")
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(neonCyan)
+                        }
+                        Spacer()
+                        
+                        // Status Indicator
+                        VStack(alignment: .trailing, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Circle().fill(Color.green).frame(width: 8, height: 8)
+                                    .shadow(color: .green, radius: 4)
+                                Text("SYS_ONLINE")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.green)
+                            }
+                            Text("V2.0.4-BUILD")
                                 .font(.system(size: 10, design: .monospaced))
                                 .foregroundColor(.gray)
                         }
-                        Spacer()
-                        Image(systemName: "chevron.right")
                     }
-                    .foregroundColor(neonCyan)
                     .padding()
-                    .background(neonCyan.opacity(0.1))
-                    .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(neonCyan.opacity(0.3), lineWidth: 1))
-                }
-                .padding(.horizontal, 20)
-                .sheet(isPresented: $showingResearch) {
-                    ResearchLibraryView(viewModel: viewModel)
-                }
-                
-                // Instructions
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("OPERATIVE DIRECTIVES")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundColor(.gray)
+                    .background(Color.black.opacity(0.4))
+                    .border(neonCyan.opacity(0.3), width: 1)
+                    .padding(.horizontal, 20)
+
+                    // Central Radar / Core System Monitor
+                    ZStack {
+                        // Outer ring
+                        Circle()
+                            .stroke(neonCyan.opacity(0.2), lineWidth: 1)
+                            .frame(width: 220, height: 220)
+                        
+                        // Tick marks
+                        Circle()
+                            .stroke(neonCyan.opacity(0.5), style: StrokeStyle(lineWidth: 4, dash: [4, 16]))
+                            .frame(width: 200, height: 200)
+                        
+                        // Radar Sweep
+                        Circle()
+                            .trim(from: 0, to: 0.2)
+                            .stroke(
+                                AngularGradient(
+                                    gradient: Gradient(colors: [.clear, neonCyan]),
+                                    center: .center,
+                                    startAngle: .degrees(0),
+                                    endAngle: .degrees(360)
+                                ),
+                                style: StrokeStyle(lineWidth: 30, lineCap: .butt)
+                            )
+                            .frame(width: 170, height: 170)
+                            .rotationEffect(.degrees(radarRotation))
+                        
+                        // Inner content
+                        VStack(spacing: 4) {
+                            Image(systemName: "cpu")
+                                .font(.system(size: 32))
+                                .foregroundColor(starkWhite)
+                            Text("CORE")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(neonCyan)
+                            Text("84%")
+                                .font(.system(size: 18, weight: .heavy, design: .monospaced))
+                                .foregroundColor(starkWhite)
+                        }
+                    }
+                    .padding(.vertical, 20)
                     
-                    DirectiveRow(step: "1", text: "Use the IoT Hub to pair with robotics hardware.")
-                    DirectiveRow(step: "2", text: "Activate the AR Scanner to track motion and deep scan objects.")
-                    DirectiveRow(step: "3", text: "Review saved scan data in the Research Folder above.")
+                    // Diagnostics Grid
+                    HStack(spacing: 16) {
+                        DiagnosticWidget(
+                            title: "LIDAR ARRAY",
+                            value: viewModel.lidarAvailable ? "ACTIVE" : "STANDBY",
+                            statusColor: viewModel.lidarAvailable ? .green : .orange,
+                            icon: "point.3.connected.trianglepath.dotted"
+                        )
+                        DiagnosticWidget(
+                            title: "BLUETOOTH",
+                            value: "MONITORING",
+                            statusColor: neonCyan,
+                            icon: "antenna.radiowaves.left.and.right"
+                        )
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    // Database / Research Archive
+                    Button(action: { showingResearch = true }) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Image(systemName: "server.rack")
+                                        .foregroundColor(neonCyan)
+                                    Text("FIELD DATA ARCHIVE")
+                                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.white)
+                                }
+                                Text("\(viewModel.researchEntries.count) STRUCTURAL SCAN(S) LOGGED")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(neonCyan.opacity(0.8))
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundColor(neonCyan)
+                        }
+                        .padding()
+                        .background(Color.black.opacity(0.3))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(neonCyan.opacity(0.4), lineWidth: 1)
+                        )
+                    }
+                    .padding(.horizontal, 20)
+                    
+                    // Activity Log
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack {
+                            Text("RECENT SYSTEM ACTIVITY")
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(starkWhite)
+                            Spacer()
+                        }
+                        .padding()
+                        .background(Color.black.opacity(0.5))
+                        
+                        VStack(spacing: 0) {
+                            SystemLogEntry(time: "14:02:42", msg: "App Initialization Complete", type: .normal)
+                            Divider().background(neonCyan.opacity(0.3))
+                            SystemLogEntry(time: "14:02:44", msg: "LiDAR Matrix Calibrated", type: .success)
+                            Divider().background(neonCyan.opacity(0.3))
+                            SystemLogEntry(time: "14:02:45", msg: "Awaiting Operative Input...", type: .normal)
+                        }
+                        .padding()
+                        .background(Color.black.opacity(0.2))
+                    }
+                    .border(neonCyan.opacity(0.3), width: 1)
+                    .padding(.horizontal, 20)
+                    
+                    Spacer().frame(height: 80)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-                
-                Spacer().frame(height: 80) // bottom padding for tab bar
+                .padding(.top, 20)
             }
-            .padding(.top, 20)
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+                radarRotation = 360
+            }
+        }
+        .sheet(isPresented: $showingResearch) {
+             ResearchLibraryView(viewModel: viewModel)
         }
     }
 }
 
 @available(iOS 16.0, *)
-struct MetricCardView: View {
+struct DiagnosticWidget: View {
     let title: String
     let value: String
+    let statusColor: Color
     let icon: String
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    private let neonCyan = Color(red: 0.0, green: 0.85, blue: 1.0)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: icon)
+                    .foregroundColor(neonCyan)
+                Spacer()
+                Circle()
+                    .fill(statusColor)
+                    .frame(width: 6, height: 6)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.gray)
+                Text(value)
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(statusColor)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black.opacity(0.3))
+        .border(neonCyan.opacity(0.3), width: 1)
+    }
+}
+
+@available(iOS 16.0, *)
+struct SystemLogEntry: View {
+    let time: String
+    let msg: String
+    let type: LogType
+    private let neonCyan = Color(red: 0.0, green: 0.85, blue: 1.0)
+    
+    enum LogType { case normal, success, error }
+    
+    var color: Color {
+        switch type {
+        case .normal: return .gray
+        case .success: return .green
+        case .error: return .red
+        }
+    }
     
     var body: some View {
         HStack {
-            Image(systemName: icon)
-                .font(.system(size: 24))
-                .foregroundColor(neonCyan)
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(.gray)
-                Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-            }
+            Text("[\(time)]")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(neonCyan.opacity(0.6))
+            Text(msg)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(color)
             Spacer()
         }
-        .padding()
-        .background(Color.black.opacity(0.4))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(neonCyan.opacity(0.15), lineWidth: 1)
-        )
-    }
-}
-
-@available(iOS 16.0, *)
-struct DirectiveRow: View {
-    let step: String
-    let text: String
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text(step)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundColor(.black)
-                .frame(width: 24, height: 24)
-                .background(neonCyan)
-                .clipShape(Circle())
-            
-            Text(text)
-                .font(.system(size: 14, weight: .regular, design: .monospaced))
-                .foregroundColor(.gray)
-                .lineSpacing(2)
-        }
+        .padding(.vertical, 8)
     }
 }
 #endif

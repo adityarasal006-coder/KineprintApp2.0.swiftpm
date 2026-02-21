@@ -34,7 +34,9 @@ final class KineprintARViewWrapper: UIView {
         let arView = KineprintARView(frame: bounds)
         arView.translatesAutoresizingMaskIntoConstraints = false
         arView.onTrackingUpdate = { [weak self] position, velocity, acceleration in
-            self?.handleTrackingUpdate(position: position, velocity: velocity, acceleration: acceleration)
+            DispatchQueue.main.async {
+                self?.handleTrackingUpdate(position: position, velocity: velocity, acceleration: acceleration)
+            }
         }
         
         addSubview(arView)
@@ -116,13 +118,30 @@ final class KineprintARViewWrapper: UIView {
     func updateRecordingPath(_ recording: Bool) {
         kineprintARView?.recordingPath = recording
     }
+    
+    func takeSnapshot() -> UIImage? {
+        return kineprintARView?.arSCNView.snapshot()
+    }
 }
 
 @available(iOS 16.0, *)
 struct ARCameraView: View {
     @ObservedObject var viewModel: KineprintViewModel
+    @State private var cameraAuthorized = false
+    @State private var hasRequested = false
     
     var body: some View {
+        ZStack {
+            if cameraAuthorized {
+                ARCameraViewController(viewModel: viewModel)
+                    .edgesIgnoringSafeArea(.all)
+                
+                LiveTargetReticleOverlay(viewModel: viewModel)
+            } else if hasRequested {
+                VStack(spacing: 20) {
+                    Image(systemName: "camera.fill.badge.ellipsis")
+                        .font(.system(size: 80))
+                        .foregroundColor(Color(red: 0, green: 1, blue: 0.85))
                     Text("CAMERA ACCESS REQUIRED")
                         .font(.system(size: 18, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
@@ -177,6 +196,7 @@ struct ARCameraView: View {
     }
 }
 
+
 @available(iOS 16.0, *)
 struct ARCameraViewController: UIViewRepresentable {
     @ObservedObject var viewModel: KineprintViewModel
@@ -184,6 +204,12 @@ struct ARCameraViewController: UIViewRepresentable {
     func makeUIView(context: Context) -> KineprintARViewWrapper {
         let arView = KineprintARViewWrapper(frame: .zero)
         arView.viewModel = viewModel
+        
+        // Pass snapshot closure to ViewModel
+        viewModel.onCaptureBlueprint = { [weak arView] in
+            return arView?.takeSnapshot()
+        }
+        
         if ARWorldTrackingConfiguration.isSupported {
             arView.startARSession()
         } else {
@@ -204,6 +230,118 @@ struct ARCameraViewController: UIViewRepresentable {
     
     class Coordinator {
         weak var wrapper: KineprintARViewWrapper?
+    }
+}
+
+@available(iOS 16.0, *)
+struct LiveTargetReticleOverlay: View {
+    @ObservedObject var viewModel: KineprintViewModel
+    
+    @State private var rotatingAngle: Double = 0
+    @State private var scanLineOffset: CGFloat = -125
+    @State private var timer: Timer?
+    @State private var liveAngleX: Int = 0
+    @State private var liveAngleY: Int = 0
+    @State private var liveDepth: Double = 0.0
+    @State private var liveTexture: String = "ANALYZING..."
+    
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+
+    var body: some View {
+        ZStack {
+            // Central Reticle
+            ZStack {
+                Circle()
+                    .stroke(neonCyan.opacity(0.4), lineWidth: 1)
+                    .frame(width: 250, height: 250)
+                
+                Circle()
+                    .stroke(neonCyan.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [10, 20]))
+                    .frame(width: 230, height: 230)
+                    .rotationEffect(.degrees(rotatingAngle))
+                
+                Path { p in
+                    p.move(to: CGPoint(x: 125, y: 15))
+                    p.addLine(to: CGPoint(x: 125, y: 45))
+                    
+                    p.move(to: CGPoint(x: 125, y: 205))
+                    p.addLine(to: CGPoint(x: 125, y: 235))
+                    
+                    p.move(to: CGPoint(x: 15, y: 125))
+                    p.addLine(to: CGPoint(x: 45, y: 125))
+                    
+                    p.move(to: CGPoint(x: 205, y: 125))
+                    p.addLine(to: CGPoint(x: 235, y: 125))
+                }
+                .stroke(neonCyan, lineWidth: 2)
+                .frame(width: 250, height: 250)
+                
+                Rectangle()
+                    .fill(LinearGradient(colors: [.clear, neonCyan.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 250, height: 2)
+                    .offset(y: scanLineOffset)
+            }
+            .padding(.bottom, 80) // Shift up slightly from center
+            
+            // HUD Text Panels
+            VStack {
+                Spacer()
+                HStack(alignment: .bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("TARGET LOCK")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(neonCyan)
+                        Text("∠X: \(liveAngleX)° | ∠Y: \(liveAngleY)°")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.white)
+                        Text(String(format: "DEPTH: %.2fm", liveDepth))
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.white)
+                    }
+                    .padding(8)
+                    .background(Color.black.opacity(0.5))
+                    .border(neonCyan.opacity(0.5), width: 1)
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text("SURFACE MAP")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(neonCyan)
+                        Text(liveTexture)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.white)
+                    }
+                    .padding(8)
+                    .background(Color.black.opacity(0.5))
+                    .border(neonCyan.opacity(0.5), width: 1)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 80)
+            }
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+                rotatingAngle = 360
+            }
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                scanLineOffset = 125
+            }
+            
+            let textures = ["METALLIC", "POLYMER", "CARBON FIBER", "GLASS", "SILICON", "STEEL ALLOY"]
+            
+            timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+                liveAngleX = Int.random(in: -45...45)
+                liveAngleY = Int.random(in: -45...45)
+                liveDepth = Double.random(in: 0.3...2.5)
+                if Int.random(in: 0...5) == 0 {
+                    liveTexture = textures.randomElement() ?? "UNKNOWN"
+                }
+            }
+        }
+        .onDisappear {
+            timer?.invalidate()
+        }
     }
 }
 #endif

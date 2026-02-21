@@ -5,12 +5,11 @@ import SwiftUI
 #if os(iOS)
 
 @available(iOS 16.0, *)
-@available(iOS 16.0, *)
 struct HackerProcessingAnimationView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var matrixOpacity: Double = 0
-    @State private var showScanningRings = false
-    @State private var blinkFrame = false
+    @State private var showTerminals = false
+    @State private var terminalCount = 0
     @State private var glitchEffect = false
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
@@ -27,22 +26,25 @@ struct HackerProcessingAnimationView: View {
                 .offset(x: glitchEffect ? 5 : -5, y: glitchEffect ? 5 : -5)
                 .animation(.randomGlitch(), value: glitchEffect)
             
-            // Multiple screens / frames tearing effect
-            if blinkFrame {
-                ForEach(0..<6) { i in
-                    Rectangle()
-                        .stroke(neonCyan.opacity(Double.random(in: 0.2...0.8)), lineWidth: CGFloat.random(in: 1...5))
-                        .frame(width: CGFloat(Int.random(in: 100...400)), height: CGFloat(Int.random(in: 100...600)))
-                        .position(x: CGFloat.random(in: 50...350), y: CGFloat.random(in: 100...700))
-                        .opacity(showScanningRings ? 0 : 1)
-                        .animation(.easeOut(duration: 0.2).delay(Double(i) * 0.05).repeatCount(10, autoreverses: true), value: showScanningRings)
+            // Multiple Terminal Windows Opening
+            if showTerminals {
+                ForEach(0..<terminalCount, id: \.self) { i in
+                    TerminalPopup(
+                        width: CGFloat.random(in: 150...300),
+                        height: CGFloat.random(in: 100...250),
+                        offset: CGSize(width: CGFloat.random(in: -100...100), height: CGFloat.random(in: -200...200)),
+                        lines: generateRandomCodes(lines: Int.random(in: 5...12)),
+                        title: "sys_override_\(i).exe"
+                    )
+                    .scaleEffect(glitchEffect ? 1.05 : 0.95)
+                    .animation(.randomGlitch().delay(Double(i) * 0.05), value: glitchEffect)
                 }
             }
             
             VStack(spacing: 20) {
                 // Central processing ring melting
                 ZStack {
-                    if showScanningRings {
+                    if showTerminals {
                         Circle()
                             .stroke(Color.red.opacity(0.8), lineWidth: 8)
                             .frame(width: 250, height: 250)
@@ -60,18 +62,18 @@ struct HackerProcessingAnimationView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 80))
                         .foregroundColor(glitchEffect ? .white : .red)
-                        .opacity(blinkFrame ? 1 : 0)
+                        .opacity(showTerminals ? 1 : 0)
                         .scaleEffect(glitchEffect ? 1.2 : 0.8)
                         .animation(.randomGlitch(), value: glitchEffect)
                 }
                 
-                Text("FATAL: ANALYZING MESH ANOMALY")
+                Text("ANALYZING SPATIAL MESH")
                     .font(.system(size: 20, weight: .heavy, design: .monospaced))
                     .foregroundColor(glitchEffect ? neonCyan : .red)
                     .offset(x: glitchEffect ? 10 : -10)
                     .animation(.randomGlitch(), value: glitchEffect)
                 
-                Text("OVERRIDING REPOSITORY...")
+                Text("GENERATING TONY STARK BLUEPRINT...")
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
                     .opacity(glitchEffect ? 0.3 : 1.0)
@@ -80,24 +82,102 @@ struct HackerProcessingAnimationView: View {
         }
         .onAppear {
             matrixOpacity = 1.0
-            showScanningRings = true
-            blinkFrame = true
+            
+            // Gradually pop up terminals
+            Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { timer in
+                if terminalCount < 8 {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
+                        showTerminals = true
+                        terminalCount += 1
+                    }
+                } else {
+                    timer.invalidate()
+                }
+            }
             
             // Trigger intense random glitches
-            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
-                if viewModel.showCapturedBlueprint {
-                    timer.invalidate()
-                } else {
-                    glitchEffect.toggle()
+            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak viewModel] timer in
+                Task { @MainActor in
+                    if viewModel?.showCapturedBlueprint == true {
+                        timer.invalidate()
+                    } else {
+                        glitchEffect.toggle()
+                    }
                 }
             }
         }
     }
+    
+    private func generateRandomCodes(lines: Int) -> [String] {
+        let codeSnippets = [
+            "0x000F: MOV EAX, [EBP-4]",
+            "DECRYPTING SECTOR 7G...",
+            "0x001A: XOR EBX, EBX",
+            "OVERRIDE_ACTIVE=TRUE",
+            "CONNECTING TO MAINFRAME...",
+            "0x002B: JMP 0x003F",
+            "UPLOADING KINEMATIC DATA...",
+            "BYPASSING SECURITY PROTOCOL...",
+            "0x004C: PUSH ECX",
+            "INITIALIZING ARC REACTOR CORE..."
+        ]
+        return (0..<lines).map { _ in codeSnippets.randomElement()! }
+    }
 }
+
 
 extension Animation {
     static func randomGlitch() -> Animation {
         return Animation.interactiveSpring(response: Double.random(in: 0.05...0.2), dampingFraction: Double.random(in: 0.1...0.5), blendDuration: Double.random(in: 0.05...0.1))
+    }
+}
+
+@available(iOS 16.0, *)
+struct TerminalPopup: View {
+    let width: CGFloat
+    let height: CGFloat
+    let offset: CGSize
+    let lines: [String]
+    let title: String
+    
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text(title)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(neonCyan)
+                Spacer()
+                HStack(spacing: 6) {
+                    Circle().fill(Color.red).frame(width: 8, height: 8)
+                    Circle().fill(Color.yellow).frame(width: 8, height: 8)
+                    Circle().fill(Color.green).frame(width: 8, height: 8)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color(red: 0.1, green: 0.15, blue: 0.2))
+            
+            // Body
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(lines.indices, id: \.self) { i in
+                    Text(lines[i])
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(.green)
+                        .lineLimit(1)
+                }
+                Spacer()
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.black.opacity(0.85))
+        }
+        .frame(width: width, height: height)
+        .border(neonCyan.opacity(0.6), width: 1)
+        .offset(offset)
+        .shadow(color: neonCyan.opacity(0.4), radius: 15)
     }
 }
 
@@ -152,8 +232,8 @@ struct BlueprintDisplayView: View {
     @State private var rotatingAngle: Double = 0
     
     // Stark Arc Reactor Blue aesthetic
-    private let draftBlue = Color(red: 0.05, green: 0.15, blue: 0.35)
-    private let starkCyan = Color(red: 0.3, green: 0.9, blue: 1.0)
+    private let draftBlue = Color(red: 0.02, green: 0.08, blue: 0.15)
+    private let starkCyan = Color(red: 0.0, green: 0.85, blue: 1.0)
     private let starkWhite = Color(red: 0.9, green: 0.95, blue: 1.0)
     
     var body: some View {
@@ -162,9 +242,10 @@ struct BlueprintDisplayView: View {
             
             // Crisp engineering grid
             EngineeringGridBackground(cyanColor: starkCyan)
-                .opacity(0.6)
+                .opacity(0.4)
             
             VStack {
+                // Header
                 HStack {
                     Button(action: {
                         viewModel.dismissBlueprintView()
@@ -181,132 +262,159 @@ struct BlueprintDisplayView: View {
                         Text(entry.title.uppercased())
                             .font(.system(size: 20, weight: .heavy, design: .monospaced))
                             .foregroundColor(starkWhite)
-                    }
-                    .opacity(textOpacity)
-                }
-                .padding()
-                .background(Color.black.opacity(0.2))
-                
-                Spacer()
-                
-                // Holographic Arc Reactor Core representation
-                ZStack {
-                    // Outer structural rings
-                    Circle()
-                        .stroke(starkCyan.opacity(0.3), lineWidth: 1)
-                        .frame(width: 320, height: 320)
-                    
-                    Circle()
-                        .stroke(starkCyan.opacity(0.5), style: StrokeStyle(lineWidth: 2, dash: [10, 5]))
-                        .frame(width: 300, height: 300)
-                        .rotationEffect(.degrees(rotatingAngle))
-                    
-                    Circle()
-                        .trim(from: 0, to: lineProgress)
-                        .stroke(starkWhite, lineWidth: 4)
-                        .frame(width: 280, height: 280)
-                        .rotationEffect(.degrees(-90))
-                    
-                    // Technical diagram lines
-                    Path { path in
-                        path.move(to: CGPoint(x: 150, y: 0))
-                        path.addLine(to: CGPoint(x: 150, y: 300))
-                        path.move(to: CGPoint(x: 0, y: 150))
-                        path.addLine(to: CGPoint(x: 300, y: 150))
-                    }
-                    .trim(from: 0, to: lineProgress)
-                    .stroke(starkCyan.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    .frame(width: 300, height: 300)
-                    
-                    // Core Geometry (Simulated Item)
-                    Path { path in
-                        let width: CGFloat = 160
-                        let height: CGFloat = 160
-                        path.move(to: CGPoint(x: width/2, y: 0))
-                        path.addLine(to: CGPoint(x: width, y: height/2))
-                        path.addLine(to: CGPoint(x: width/2, y: height))
-                        path.addLine(to: CGPoint(x: 0, y: height/2))
-                        path.closeSubpath()
-                    }
-                    .trim(from: 0, to: lineProgress)
-                    .stroke(starkCyan, lineWidth: 3)
-                    .frame(width: 160, height: 160)
-                    .background(
-                        Path { path in
-                            let width: CGFloat = 160
-                            let height: CGFloat = 160
-                            path.move(to: CGPoint(x: width/2, y: 0))
-                            path.addLine(to: CGPoint(x: width, y: height/2))
-                            path.addLine(to: CGPoint(x: width/2, y: height))
-                            path.addLine(to: CGPoint(x: 0, y: height/2))
-                            path.closeSubpath()
-                        }
-                        .fill(starkCyan.opacity(0.15))
-                        .opacity(textOpacity)
-                    )
-                    
-                    // Center Core text
-                    VStack {
-                        Text("CORE")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(starkWhite)
-                        Text(entry.mass)
-                            .font(.system(size: 10, design: .monospaced))
+                        Text("PRACTICAL KNOWLEDGE DATABASE: ACTIVE")
+                            .font(.system(size: 8, design: .monospaced))
                             .foregroundColor(starkCyan)
                     }
                     .opacity(textOpacity)
                 }
-                .padding(.vertical, 30)
+                .padding()
+                .background(Color.black.opacity(0.4))
+                .border(starkCyan.opacity(0.3), width: 1)
                 
                 Spacer()
                 
-                // Extracted Information Schematic Table
-                if showDetails {
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Text("STRUCTURAL SCHEMATIC")
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundColor(starkWhite)
-                            Spacer()
-                            Text(entry.scanQuality)
-                                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                                .foregroundColor(starkCyan)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(starkCyan.opacity(0.15))
-                                .cornerRadius(4)
+                // Blueprint Core & Data Nodes
+                ZStack {
+                    // Lines connecting center to nodes
+                    if showDetails {
+                        GeometryReader { geo in
+                            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
+                            Path { p in
+                                // Center to Top Left
+                                p.move(to: center)
+                                p.addLine(to: CGPoint(x: center.x - 100, y: center.y - 100))
+                                p.addLine(to: CGPoint(x: center.x - 150, y: center.y - 100))
+                                
+                                // Center to Top Right
+                                p.move(to: center)
+                                p.addLine(to: CGPoint(x: center.x + 100, y: center.y - 100))
+                                p.addLine(to: CGPoint(x: center.x + 150, y: center.y - 100))
+                                
+                                // Center to Bottom Left
+                                p.move(to: center)
+                                p.addLine(to: CGPoint(x: center.x - 100, y: center.y + 100))
+                                p.addLine(to: CGPoint(x: center.x - 150, y: center.y + 100))
+                                
+                                // Center to Bottom Right
+                                p.move(to: center)
+                                p.addLine(to: CGPoint(x: center.x + 100, y: center.y + 100))
+                                p.addLine(to: CGPoint(x: center.x + 150, y: center.y + 100))
+                            }
+                            .trim(from: 0, to: lineProgress)
+                            .stroke(starkCyan.opacity(0.6), lineWidth: 1.5)
                         }
-                        .padding()
-                        .background(Color.black.opacity(0.4))
-                        
-                        VStack(spacing: 0) {
-                            BlueprintDetailRow(label: "DIMENSIONS", value: entry.dimensions, color: starkCyan)
-                            Divider().background(starkCyan.opacity(0.3))
-                            BlueprintDetailRow(label: "MATERIAL", value: entry.material, color: starkCyan)
-                            Divider().background(starkCyan.opacity(0.3))
-                            BlueprintDetailRow(label: "ESTIMATED MASS", value: entry.mass, color: starkCyan)
-                        }
-                        .padding()
-                        .background(Color.black.opacity(0.2))
+                        .frame(height: 300)
                     }
-                    .frame(maxWidth: .infinity)
-                    .border(starkCyan.opacity(0.5), width: 1)
-                    .padding(.horizontal, 20)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+
+                    // Holographic Arc Reactor Core representation
+                    ZStack {
+                        Circle()
+                            .stroke(starkCyan.opacity(0.3), lineWidth: 1)
+                            .frame(width: 220, height: 220)
+                        
+                        Circle()
+                            .stroke(starkCyan.opacity(0.5), style: StrokeStyle(lineWidth: 2, dash: [10, 5]))
+                            .frame(width: 200, height: 200)
+                            .rotationEffect(.degrees(rotatingAngle))
+                        
+                        Circle()
+                            .trim(from: 0, to: lineProgress)
+                            .stroke(starkWhite, lineWidth: 4)
+                            .frame(width: 180, height: 180)
+                            .rotationEffect(.degrees(-90))
+                        
+                        // Technical diagram lines
+                        Path { path in
+                            path.move(to: CGPoint(x: 100, y: 0))
+                            path.addLine(to: CGPoint(x: 100, y: 200))
+                            path.move(to: CGPoint(x: 0, y: 100))
+                            path.addLine(to: CGPoint(x: 200, y: 100))
+                        }
+                        .trim(from: 0, to: lineProgress)
+                        .stroke(starkCyan.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                        .frame(width: 200, height: 200)
+                        
+                        // Core Geometry (Actual or Simulated Item)
+                        if let imagePath = entry.imagePath, let uiImage = UIImage(contentsOfFile: imagePath) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 140, height: 140)
+                                .clipShape(Circle())
+                                .colorMultiply(starkCyan) // Applies hologram tint
+                                .opacity(textOpacity)
+                                .shadow(color: starkCyan.opacity(0.8), radius: 20)
+                        } else {
+                            // Fallback Geometry
+                            Path { path in
+                                let width: CGFloat = 100
+                                let height: CGFloat = 100
+                                path.move(to: CGPoint(x: width/2, y: 0))
+                                path.addLine(to: CGPoint(x: width, y: height/2))
+                                path.addLine(to: CGPoint(x: width/2, y: height))
+                                path.addLine(to: CGPoint(x: 0, y: height/2))
+                                path.closeSubpath()
+                            }
+                            .trim(from: 0, to: lineProgress)
+                            .stroke(starkCyan, lineWidth: 3)
+                            .frame(width: 100, height: 100)
+                            .background(
+                                Path { path in
+                                    let width: CGFloat = 100
+                                    let height: CGFloat = 100
+                                    path.move(to: CGPoint(x: width/2, y: 0))
+                                    path.addLine(to: CGPoint(x: width, y: height/2))
+                                    path.addLine(to: CGPoint(x: width/2, y: height))
+                                    path.addLine(to: CGPoint(x: 0, y: height/2))
+                                    path.closeSubpath()
+                                }
+                                .fill(starkCyan.opacity(0.15))
+                                .opacity(textOpacity)
+                            )
+                        }
+                    }
+                    .frame(height: 300)
+                    
+                    // Data Nodes
+                    if showDetails {
+                        VStack(spacing: 160) {
+                            HStack {
+                                BlueprintDataNode(title: "DIMENSIONS", val1: "W: \(entry.dimensions)", val2: "H: CALCULATED", color: starkCyan)
+                                Spacer()
+                                BlueprintDataNode(title: "MATERIAL", val1: "TYPE: \(entry.material)", val2: "DENSITY: Unknown", color: starkCyan)
+                            }
+                            HStack {
+                                BlueprintDataNode(title: "KINEMATICS", val1: "MASS: \(entry.mass)", val2: "STRUCT: VERIFIED", color: starkCyan)
+                                Spacer()
+                                BlueprintDataNode(title: "ANALYSIS", val1: "QUAL: \(entry.scanQuality)", val2: "STATUS: STABLE", color: starkCyan)
+                            }
+                        }
+                        .padding(.horizontal, 20)
+                        .transition(.scale.combined(with: .opacity))
+                    }
                 }
                 
                 Spacer()
+                
+                if showDetails {
+                    Text("PRACTICAL FIELD KNOWLEDGE EXTRACTED")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(starkCyan.opacity(0.8))
+                        .padding(.bottom, 20)
+                }
             }
         }
         .onAppear {
-            withAnimation(.linear(duration: 10).repeatForever(autoreverses: false)) {
+            lineProgress = 0.0
+            withAnimation(.linear(duration: 15).repeatForever(autoreverses: false)) {
                 rotatingAngle = 360
             }
-            withAnimation(.easeInOut(duration: 2.0)) {
+            withAnimation(.easeInOut(duration: 1.5)) {
                 lineProgress = 1.0
                 textOpacity = 1.0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                     showDetails = true
                 }
@@ -316,22 +424,34 @@ struct BlueprintDisplayView: View {
 }
 
 @available(iOS 16.0, *)
-struct BlueprintDetailRow: View {
-    let label: String
-    let value: String
+struct BlueprintDataNode: View {
+    let title: String
+    let val1: String
+    let val2: String
     let color: Color
     
     var body: some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(color.opacity(0.8))
-            Spacer()
-            Text(value)
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(color)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(color.opacity(0.2))
+                .border(color.opacity(0.5), width: 1)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(val1)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.white)
+                Text(val2)
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding(.leading, 4)
+            .padding(.bottom, 4)
         }
-        .padding(.vertical, 8)
+        .frame(width: 130, alignment: .leading)
     }
 }
 
