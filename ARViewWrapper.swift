@@ -249,93 +249,104 @@ struct LiveTargetReticleOverlay: View {
 
     var body: some View {
         ZStack {
-            // Central Reticle
+            // Central Reticle - ENLARGED AND CENTERED
             ZStack {
                 Circle()
                     .stroke(neonCyan.opacity(0.4), lineWidth: 1)
-                    .frame(width: 250, height: 250)
+                    .frame(width: 320, height: 320)
                 
                 Circle()
                     .stroke(neonCyan.opacity(0.8), style: StrokeStyle(lineWidth: 2, dash: [10, 20]))
-                    .frame(width: 230, height: 230)
+                    .frame(width: 300, height: 300)
                     .rotationEffect(.degrees(rotatingAngle))
                 
                 Path { p in
-                    p.move(to: CGPoint(x: 125, y: 15))
-                    p.addLine(to: CGPoint(x: 125, y: 45))
+                    p.move(to: CGPoint(x: 160, y: 15))
+                    p.addLine(to: CGPoint(x: 160, y: 55))
                     
-                    p.move(to: CGPoint(x: 125, y: 205))
-                    p.addLine(to: CGPoint(x: 125, y: 235))
+                    p.move(to: CGPoint(x: 160, y: 265))
+                    p.addLine(to: CGPoint(x: 160, y: 305))
                     
-                    p.move(to: CGPoint(x: 15, y: 125))
-                    p.addLine(to: CGPoint(x: 45, y: 125))
+                    p.move(to: CGPoint(x: 15, y: 160))
+                    p.addLine(to: CGPoint(x: 55, y: 160))
                     
-                    p.move(to: CGPoint(x: 205, y: 125))
-                    p.addLine(to: CGPoint(x: 235, y: 125))
+                    p.move(to: CGPoint(x: 265, y: 160))
+                    p.addLine(to: CGPoint(x: 305, y: 160))
                 }
                 .stroke(neonCyan, lineWidth: 2)
-                .frame(width: 250, height: 250)
+                .frame(width: 320, height: 320)
                 
                 Rectangle()
-                    .fill(LinearGradient(colors: [.clear, neonCyan.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
-                    .frame(width: 250, height: 2)
-                    .offset(y: scanLineOffset)
+                    .fill(LinearGradient(colors: [.clear, neonCyan.opacity(0.8), .clear], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 320, height: 3)
+                    .offset(y: scanLineOffset * 1.28)
             }
-            .padding(.bottom, 80) // Shift up slightly from center
+            // Removed bottom padding to keep it centered
             
-            // HUD Text Panels
+            // HUD Text Panels - UPGRADED WITH BIO/ENVIRONMENTAL DATA
             VStack {
                 Spacer()
                 HStack(alignment: .bottom) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("TARGET LOCK")
+                        Text("QUANTUM TARGET LOCK")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundColor(neonCyan)
                         Text("∠X: \(liveAngleX)° | ∠Y: \(liveAngleY)°")
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.white)
-                        Text(String(format: "DEPTH: %.2fm", liveDepth))
-                            .font(.system(size: 12, design: .monospaced))
+                        Text(String(format: "DEPTH_MTR: %.3fm", liveDepth))
+                            .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.white)
+                        Text("BIO_THERM: 36.6°C")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.green)
                     }
-                    .padding(8)
-                    .background(Color.black.opacity(0.5))
-                    .border(neonCyan.opacity(0.5), width: 1)
+                    .padding(10)
+                    .frame(width: 170, alignment: .leading)
+                    .background(Color.black.opacity(0.6))
+                    .border(neonCyan.opacity(0.6), width: 1)
                     
                     Spacer()
                     
                     VStack(alignment: .trailing, spacing: 4) {
-                        Text("SURFACE MAP")
+                        Text("SPATIAL_ANALYTICS")
                             .font(.system(size: 10, weight: .bold, design: .monospaced))
                             .foregroundColor(neonCyan)
                         Text(liveTexture)
-                            .font(.system(size: 12, design: .monospaced))
+                            .font(.system(size: 11, design: .monospaced))
                             .foregroundColor(.white)
+                        Text("VIB_FREQ: 142.4 Hz")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.orange)
+                        Text("MASS_EST: 64.2kg")
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(neonCyan.opacity(0.8))
                     }
-                    .padding(8)
-                    .background(Color.black.opacity(0.5))
-                    .border(neonCyan.opacity(0.5), width: 1)
+                    .padding(10)
+                    .frame(width: 170, alignment: .trailing)
+                    .background(Color.black.opacity(0.6))
+                    .border(neonCyan.opacity(0.6), width: 1)
                 }
                 .padding(.horizontal, 20)
-                .padding(.bottom, 80)
+                .padding(.bottom, 85) // Moved lower to avoid reticle overlap
             }
         }
         .onAppear {
-            withAnimation(.linear(duration: 8).repeatForever(autoreverses: false)) {
+            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
                 rotatingAngle = 360
             }
-            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                 scanLineOffset = 125
             }
             
-            let textures = ["METALLIC", "POLYMER", "CARBON FIBER", "GLASS", "SILICON", "STEEL ALLOY"]
+            let textures = ["METALLIC_ALLOY", "CARBON_POLYMER", "SILICATE_MATRIX", "SYNTHETIC_FIBER", "BIO_CELLULAR", "COMPOSITE_GEN-4"]
             
-            timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+            timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
                 liveAngleX = Int.random(in: -45...45)
                 liveAngleY = Int.random(in: -45...45)
-                liveDepth = Double.random(in: 0.3...2.5)
-                if Int.random(in: 0...5) == 0 {
-                    liveTexture = textures.randomElement() ?? "UNKNOWN"
+                liveDepth = Double.random(in: 0.3...3.5)
+                if Int.random(in: 0...4) == 0 {
+                    liveTexture = textures.randomElement() ?? "SCANNING..."
                 }
             }
         }

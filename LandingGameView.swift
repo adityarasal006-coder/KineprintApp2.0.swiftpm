@@ -33,6 +33,7 @@ struct LandingGameView: View {
     @State private var canvasWidth: Double = 320
     @State private var streak = 0
     @State private var canvasHeight: Double = 200
+    @State private var thinkingLog: [String] = ["SYSTEM_IDLE", "AWAITING_BALLISTIC_TARGET"]
     
     // Computed physics values
     private var timeOfFlight: Double { 2.0 * v0 * sin(angle * .pi / 180) / g }
@@ -63,167 +64,165 @@ struct LandingGameView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Problem statement
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("INITIAL VELOCITY")
-                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                        .foregroundColor(.gray)
-                                    Text(String(format: "v₀ = %.1f m/s", v0))
-                                        .font(.system(size: 20, weight: .heavy, design: .monospaced))
-                                        .foregroundColor(neonCyan)
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    Text("LAUNCH ANGLE")
-                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                        .foregroundColor(.gray)
-                                    Text(String(format: "θ = %.0f°", angle))
-                                        .font(.system(size: 20, weight: .heavy, design: .monospaced))
-                                        .foregroundColor(neonOrange)
-                                }
+                // Advanced Physics Stage
+                ZStack {
+                    GeometryReader { geo in
+                        GridBackground(color: neonCyan, size: geo.size)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 0) {
+                        // Diagnostic HUD
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Label("BALLISTIC_VARS", systemImage: "target")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundColor(neonCyan)
+                                
+                                HUDDataRow(label: "V_0", value: String(format: "%.1f m/s", v0))
+                                HUDDataRow(label: "THETA", value: String(format: "%.0f°", angle))
+                                HUDDataRow(label: "G_REF", value: "9.81 m/s²")
                             }
+                            .padding(10)
+                            .background(Color.black.opacity(0.6))
+                            .border(neonCyan.opacity(0.3), width: 1)
                             
-                            // Physics preview row
-                            HStack(spacing: 0) {
-                                PhysicsDataCell(label: "RANGE", value: String(format: "%.1f m", range), color: neonGreen)
-                                PhysicsDataCell(label: "MAX H", value: String(format: "%.1f m", maxHeight), color: neonCyan)
-                                PhysicsDataCell(label: "TIME", value: String(format: "%.2f s", timeOfFlight), color: neonOrange)
+                            Spacer()
+                            
+                            // Thinking Log
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("COMPUTE_MODULE: ONLINE")
+                                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.green)
+                                ForEach(thinkingLog, id: \.self) { log in
+                                    Text("> \(log)")
+                                        .font(.system(size: 8, design: .monospaced))
+                                        .foregroundColor(neonCyan.opacity(0.7))
+                                }
                             }
+                            .frame(width: 160, alignment: .trailing)
                         }
-                        .padding(14)
-                        .background(Color.white.opacity(0.04))
-                        .cornerRadius(14)
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.15), lineWidth: 0.5))
+                        .padding(16)
                         
-                        // Canvas
+                        // Canvas Area
                         GeometryReader { geo in
                             ZStack {
-                                GridBackground(color: neonCyan, size: geo.size)
-                                
-                                // Ground line
+                                // Ground plane
                                 Path { p in
-                                    p.move(to: CGPoint(x: 0, y: geo.size.height - 20))
-                                    p.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height - 20))
+                                    p.move(to: CGPoint(x: 0, y: geo.size.height - 30))
+                                    p.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height - 30))
                                 }
-                                .stroke(neonCyan.opacity(0.3), lineWidth: 1.5)
+                                .stroke(neonCyan.opacity(0.3), lineWidth: 1)
                                 
-                                // Launch arrow
-                                if !isLaunched {
-                                    LaunchArrow(angle: angle, color: neonOrange, origin: CGPoint(x: 30, y: geo.size.height - 30))
-                                }
-                                
-                                // Trail
-                                if showTrail && trailPoints.count > 1 {
+                                // Predictive Dots
+                                if !isLaunched && userTapX == nil {
                                     Path { path in
-                                        path.move(to: trailPoints[0])
-                                        for pt in trailPoints.dropFirst() { path.addLine(to: pt) }
+                                        let step = geo.size.width / 20.0
+                                        for i in 0...10 {
+                                            let x = CGFloat(i) * step + 30
+                                            path.addEllipse(in: CGRect(x: x, y: geo.size.height - 32, width: 2, height: 2))
+                                        }
                                     }
-                                    .stroke(neonCyan.opacity(0.7), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                                    .fill(neonCyan.opacity(0.2))
                                 }
                                 
-                                // Projectile ball
+                                // Projectile & Trail
                                 if isLaunched {
-                                    let scaleX = (geo.size.width - 60) / max(range, 1)
-                                    let scaleY = (geo.size.height - 60) / max(maxHeight, 1)
-                                    let px = 30 + projectileX * scaleX
-                                    let py = geo.size.height - 30 - projectileY * scaleY
+                                    // Ball
                                     Circle()
                                         .fill(neonCyan)
-                                        .frame(width: 16, height: 16)
-                                        .shadow(color: neonCyan.opacity(0.6), radius: 8)
-                                        .position(x: px, y: py)
+                                        .frame(width: 12, height: 12)
+                                        .shadow(color: neonCyan.opacity(0.6), radius: 6)
+                                        .position(trailPoints.last ?? CGPoint(x: 30, y: geo.size.height - 30))
+                                    
+                                    // Altitude readout
+                                    VStack(alignment: .leading) {
+                                        Text("ALT: \(String(format: "%.1fm", projectileY))")
+                                        Text("DIST: \(String(format: "%.1fm", projectileX))")
+                                    }
+                                    .font(.system(size: 8, design: .monospaced))
+                                    .foregroundColor(neonCyan)
+                                    .position(x: (trailPoints.last?.x ?? 0) + 40, y: (trailPoints.last?.y ?? 0) - 20)
+                                    
+                                    // Trail
+                                    Path { path in
+                                        if let first = trailPoints.first {
+                                            path.move(to: first)
+                                            for pt in trailPoints { path.addLine(to: pt) }
+                                        }
+                                    }
+                                    .stroke(neonCyan, style: StrokeStyle(lineWidth: 1.5, dash: [4, 2]))
                                 }
                                 
-                                // User tap marker
+                                // Target marker (scientist style)
                                 if let tapX = userTapX {
                                     VStack(spacing: 0) {
-                                        Image(systemName: "mappin.circle.fill")
-                                            .font(.system(size: 24))
+                                        Text("PREDICTION_TARGET")
+                                            .font(.system(size: 6, weight: .bold, design: .monospaced))
                                             .foregroundColor(neonOrange)
-                                            .shadow(color: neonOrange.opacity(0.5), radius: 6)
-                                        Rectangle()
-                                            .fill(neonOrange.opacity(0.4))
-                                            .frame(width: 2, height: 20)
+                                        Image(systemName: "scope")
+                                            .font(.system(size: 20))
+                                            .foregroundColor(neonOrange)
+                                        Rectangle().fill(neonOrange).frame(width: 1, height: 20)
                                     }
-                                    .position(x: tapX, y: geo.size.height - 32)
+                                    .position(x: tapX, y: geo.size.height - 40)
                                 }
                                 
-                                // Result markers
+                                // Actual landing marker
                                 if showResult {
-                                    let scaleX = (geo.size.width - 60) / max(range, 1)
-                                    let actualLandX = 30 + range * scaleX
-                                    
-                                    // Actual landing
-                                    Image(systemName: "star.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(.yellow)
-                                        .shadow(color: Color.yellow.opacity(0.5), radius: 8)
-                                        .position(x: actualLandX, y: geo.size.height - 30)
-                                    
-                                    Text("ACTUAL")
+                                    let rx = 30 + range * ((geo.size.width - 60) / max(range, 1))
+                                    Circle()
+                                        .stroke(Color.yellow, lineWidth: 2)
+                                        .frame(width: 30, height: 30)
+                                        .position(x: rx, y: geo.size.height - 30)
+                                    Text("IMPACT_SITE")
                                         .font(.system(size: 7, weight: .bold, design: .monospaced))
                                         .foregroundColor(.yellow)
-                                        .position(x: actualLandX, y: geo.size.height - 44)
-                                }
-                                
-                                // Instruction overlay when waiting for tap
-                                if !isLaunched && userTapX == nil && !showResult {
-                                    Text("TAP THE GROUND WHERE YOU PREDICT LANDING →")
-                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                        .foregroundColor(neonCyan.opacity(0.5))
-                                        .position(x: geo.size.width / 2, y: geo.size.height - 10)
+                                        .position(x: rx, y: geo.size.height - 50)
                                 }
                             }
                             .contentShape(Rectangle())
-                            .onTapGesture { location in
+                            .onTapGesture { loc in
                                 if !isLaunched && !showResult {
-                                    userTapX = location.x
-                                    canvasWidth = geo.size.width
-                                    canvasHeight = geo.size.height
+                                    userTapX = loc.x
+                                    updateLog("TARGET_LOCKED: \(Int(loc.x))px")
                                 }
                             }
                             .onAppear { canvasWidth = geo.size.width; canvasHeight = geo.size.height }
                         }
-                        .frame(height: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.2), lineWidth: 1))
+                        .padding(.bottom, 20)
                         
-                        // Launch button
+                        // Controls
+                        HStack(spacing: 12) {
+                            ScientificSlider(label: "LAUNCH_ARC", value: $angle, range: 10...85, unit: "°", color: neonOrange)
+                            ScientificSlider(label: "THRUST_SEC", value: $v0, range: 5...35, unit: "m/s", color: neonCyan)
+                        }
+                        .padding(16)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                        
+                        // Action
                         if !showResult {
                             Button(action: launchProjectile) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "arrow.up.right.circle.fill")
-                                        .font(.system(size: 22))
-                                    Text(userTapX == nil ? "TAP CANVAS FIRST" : (isLaunched ? "LAUNCHING..." : "LAUNCH!"))
-                                        .font(.system(size: 15, weight: .bold, design: .monospaced))
-                                }
-                                .foregroundColor(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(userTapX == nil ? Color.gray : (isLaunched ? Color.orange : neonGreen))
-                                .cornerRadius(14)
-                                .shadow(color: neonGreen.opacity(0.3), radius: 10)
+                                Text(isLaunched ? "SIMULATING_FLIGHT..." : (userTapX == nil ? "AWAITING_TARGET_TAP" : "INITIATE_LAUNCH"))
+                                    .font(.system(size: 14, weight: .black, design: .monospaced))
+                                    .foregroundColor(.black)
+                                    .padding(.vertical, 18)
+                                    .frame(maxWidth: .infinity)
+                                    .background(userTapX == nil ? Color.gray : (isLaunched ? Color.orange : neonGreen))
+                                    .cornerRadius(12)
+                                    .shadow(color: (userTapX == nil ? .clear : neonGreen.opacity(0.3)), radius: 8)
                             }
+                            .padding(16)
                             .disabled(userTapX == nil || isLaunched)
                         }
                         
-                        // Result
                         if showResult {
-                            LandingResultView(
-                                accuracy: hitAccuracy,
-                                range: range,
-                                onNext: nextLevel,
-                                onRetry: resetLevel
-                            )
+                            LandingResultView(accuracy: hitAccuracy, range: range, onNext: nextLevel, onRetry: resetLevel)
+                                .transition(.move(edge: .bottom).combined(with: .opacity))
+                                .padding(.horizontal)
                         }
-                        
-                        Spacer().frame(height: 20)
                     }
-                    .padding(16)
                 }
             }
         }
@@ -246,26 +245,27 @@ struct LandingGameView: View {
         let capturedG = g
         var localElapsed = 0.0
         timer = Timer.scheduledTimer(withTimeInterval: dt, repeats: true) { t in
-            localElapsed += dt
-            let te = localElapsed
-            let vx = capturedV0 * cos(capturedAngle * .pi / 180)
-            let vy = capturedV0 * sin(capturedAngle * .pi / 180)
-            let newX = vx * te
-            let newY = vy * te - 0.5 * capturedG * te * te
-            let px = 30 + newX * scaleX
-            let py = capturedCanvasHeight - 30 - newY * scaleY
-            let shouldStop = newY <= 0 && te > 0.1
-            if shouldStop { t.invalidate() }
-            DispatchQueue.main.async {
-                elapsedTime = te
-                projectileX = newX
-                projectileY = newY
-                trailPoints.append(CGPoint(x: px, y: py))
+            Task { @MainActor in
+                localElapsed += dt
+                let te = localElapsed
+                let vx = capturedV0 * cos(capturedAngle * .pi / 180)
+                let vy = capturedV0 * sin(capturedAngle * .pi / 180)
+                let newX = vx * te
+                let newY = vy * te - 0.5 * capturedG * te * te
+                let px = 30 + newX * scaleX
+                let py = capturedCanvasHeight - 30 - newY * scaleY
+                let shouldStop = newY <= 0 && te > 0.1
+                if shouldStop { t.invalidate() }
+                
+                self.elapsedTime = te
+                self.projectileX = newX
+                self.projectileY = newY
+                self.trailPoints.append(CGPoint(x: px, y: py))
                 if shouldStop {
-                    landingX = 30 + capturedRange * scaleX
-                    calculateHitAccuracy()
-                    isLaunched = false
-                    showResult = true
+                    self.landingX = 30 + capturedRange * scaleX
+                    self.calculateHitAccuracy()
+                    self.isLaunched = false
+                    self.showResult = true
                 }
             }
         }
@@ -279,6 +279,13 @@ struct LandingGameView: View {
         totalScore += pts
         score = totalScore
         if hitAccuracy > 0.6 { streak += 1 } else { streak = 0 }
+    }
+    
+    private func updateLog(_ msg: String) {
+        withAnimation {
+            thinkingLog.append(msg)
+            if thinkingLog.count > 4 { thinkingLog.removeFirst() }
+        }
     }
     
     private func nextLevel() {
@@ -296,56 +303,6 @@ struct LandingGameView: View {
 
 // MARK: - Supporting Views
 
-@MainActor
-@available(iOS 16.0, *)
-struct LaunchArrow: View {
-    let angle: Double
-    let color: Color
-    let origin: CGPoint
-    
-    var body: some View {
-        let length = 40.0
-        let rad = angle * .pi / 180
-        let endX = origin.x + length * cos(rad)
-        let endY = origin.y - length * sin(rad)
-        
-        return ZStack {
-            Path { p in
-                p.move(to: origin)
-                p.addLine(to: CGPoint(x: endX, y: endY))
-            }
-            .stroke(color, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-            
-            Image(systemName: "arrowtriangle.up.fill")
-                .font(.system(size: 10))
-                .foregroundColor(color)
-                .rotationEffect(.degrees(-(angle - 90)))
-                .position(x: endX, y: endY)
-        }
-    }
-}
-
-@MainActor
-@available(iOS 16.0, *)
-struct PhysicsDataCell: View {
-    let label: String
-    let value: String
-    let color: Color
-    
-    var body: some View {
-        VStack(spacing: 3) {
-            Text(label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(.gray)
-            Text(value)
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .foregroundColor(color)
-        }
-        .frame(maxWidth: .infinity)
-    }
-}
-
-@MainActor
 @available(iOS 16.0, *)
 struct LandingResultView: View {
     let accuracy: Double
@@ -354,45 +311,28 @@ struct LandingResultView: View {
     let onRetry: () -> Void
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
-    var grade: String {
-        if accuracy > 0.9 { return "PERFECT!" }
-        else if accuracy > 0.7 { return "GREAT!" }
-        else if accuracy > 0.5 { return "CLOSE!" }
-        else { return "MISS!" }
-    }
-    
     var body: some View {
-        VStack(spacing: 14) {
-            Text(grade)
-                .font(.system(size: 22, weight: .heavy, design: .monospaced))
-                .foregroundColor(accuracy > 0.5 ? neonCyan : .red)
+        VStack(spacing: 12) {
+            Text(accuracy > 0.8 ? "BULLSEYE_ACHIEVED" : "TRAJECTORY_MISMATCH")
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(accuracy > 0.8 ? .green : .orange)
             
-            Text(String(format: "Accuracy: %.0f%%  |  Actual Range: %.1f m", accuracy * 100, range))
-                .font(.system(size: 11, design: .monospaced))
+            Text("ACCURACY: \(Int(accuracy * 100))% | RANGE: \(String(format: "%.1f", range))m")
+                .font(.system(size: 8, design: .monospaced))
                 .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
             
             HStack(spacing: 16) {
                 Button(action: onRetry) {
-                    Label("RETRY", systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20).padding(.vertical, 10)
-                        .background(Color.gray).cornerRadius(10)
+                    Text("RE-CALCULATE").font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white).padding(10).background(Color.white.opacity(0.1)).cornerRadius(6)
                 }
                 Button(action: onNext) {
-                    Label("NEXT LEVEL", systemImage: "chevron.right.2")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20).padding(.vertical, 10)
-                        .background(neonCyan).cornerRadius(10)
+                    Text("NEXT_TARGET").font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.black).padding(10).background(neonCyan).cornerRadius(6)
                 }
             }
         }
-        .padding(16)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.15), lineWidth: 0.5))
+        .padding(16).background(Color.black.opacity(0.8)).overlay(RoundedRectangle(cornerRadius: 12).stroke(neonCyan.opacity(0.3), lineWidth: 1))
     }
 }
 #endif

@@ -16,6 +16,8 @@ class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
     var trajectoryPoints: [SIMD3<Float>] = []
     var currentTrajectoryNode: SCNNode?
     private let physicsEngine = PhysicsEngine.shared
+    private let coreMLHandler = CoreMLHandler()
+    private var isAnalyzing = false
     
     // Neon cyan color used throughout
     private let neonCyan = UIColor(red: 0, green: 1, blue: 0.85, alpha: 1.0)
@@ -563,7 +565,146 @@ class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
 
 extension KineprintARView {
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        // Handle frame updates if needed
+        // Only analyze if not already busy
+        guard !isAnalyzing else { return }
+        isAnalyzing = true
+        
+        let pixelBuffer = frame.capturedImage
+        
+        // Run classification on a background thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            // Get classification for target lock display
+            self.coreMLHandler.classifyObject(in: pixelBuffer) { label, material in
+                DispatchQueue.main.async {
+                    // We could send this to the UI if we had a callback
+                    // For now, we'll store it or just use it for internal logic
+                }
+            }
+            
+            // Get human/rect detection
+            let (rects, humans) = self.coreMLHandler.processFrame(pixelBuffer: pixelBuffer)
+            
+            DispatchQueue.main.async {
+                self.updateDetectionOverlays(rects: rects, humans: humans)
+                self.isAnalyzing = false
+            }
+        }
+    }
+    
+    private func updateDetectionOverlays(rects: [VNRectangleObservation], humans: [VNHumanObservation]) {
+        // Clean up old detections
+        arSCNView.scene.rootNode.childNode(withName: "detection_layer", recursively: false)?.removeFromParentNode()
+        
+        let layerNode = SCNNode()
+        layerNode.name = "detection_layer"
+        
+        // Add human detection boxes (blueprints) - UPGRADED
+        for human in humans {
+            addBlueprintBox(
+                for: human.boundingBox, 
+                color: neonCyan.withAlphaComponent(0.8), 
+                type: .human,
+                to: layerNode
+            )
+        }
+        
+        // Add object detection boxes - UPGRADED
+        for rect in rects {
+            addBlueprintBox(
+                for: rect.boundingBox, 
+                color: neonCyan.withAlphaComponent(0.4), 
+                type: .object,
+                to: layerNode
+            )
+        }
+        
+        arSCNView.scene.rootNode.addChildNode(layerNode)
+    }
+    
+    enum DetectionType {
+        case human, object
+    }
+    
+    private func addBlueprintBox(for rect: CGRect, color: UIColor, type: DetectionType, to parent: SCNNode) {
+        // Raycast center of rect to find 3D position
+        let center = CGPoint(x: rect.midX, y: 1.0 - rect.midY) // Convert Vision coordinates
+        let results = arSCNView.raycastQuery(from: center, allowing: .estimatedPlane, alignment: .any).flatMap { query in
+            arSession.raycast(query)
+        }
+        
+        let worldPos = results?.first?.worldTransform.columns.3 ?? SIMD4<Float>(0, 0, -1.5, 1) // Fallback if no plane
+        
+        let box = SCNBox(width: 0.15, height: 0.15, length: 0.15, chamferRadius: 0.01)
+        box.firstMaterial?.diffuse.contents = UIColor.clear
+        box.firstMaterial?.emission.contents = color.withAlphaComponent(0.2)
+        
+        let boxNode = SCNNode(geometry: box)
+        boxNode.position = SCNVector3(worldPos.x, worldPos.y, worldPos.z)
+        
+        // Add Blueprint Labels (The "Next Level" Scanner Activity)
+        _ = SCNNode()
+        let details: String
+        
+        if type == .human {
+            let gender = ["MALE", "FEMALE"].randomElement() ?? "MALE"
+            let height = Double.random(in: 165...185)
+            let weight = Double.random(in: 60...85)
+            let temp = Double.random(in: 36.4...36.8)
+            let angle = Int.random(in: -10...10)
+            let mark = ["NONE", "SCAN_MARK_L1", "DERMAL_ID_V2"].randomElement() ?? "NONE"
+            
+            details = """
+            [BIO_SCAN_ACTIVE]
+            GEN: \(gender)
+            HGT: \(String(format: "%.1f", height))cm
+            WGT: \(String(format: "%.1f", weight))kg
+            TMP: \(String(format: "%.1f", temp))°C
+            ANG: \(angle)°
+            MARK: \(mark)
+            """
+        } else {
+            let mats = ["STEEL", "TITANIUM", "AL_ALLOY", "POLYMER"]
+            let texture = ["SMOOTH", "GRITTY", "MATTE", "METALLIC"]
+            let weight = Double.random(in: 0.5...5.0)
+            let dimW = Double.random(in: 10...30)
+            let dimH = Double.random(in: 5...15)
+            
+            details = """
+            [OBJ_ANALYSIS]
+            TYPE: MECH_PART
+            MAT: \(mats.randomElement() ?? "ALLOY")
+            TEX: \(texture.randomElement() ?? "SMOOTH")
+            WGT: \(String(format: "%.2f", weight))kg
+            DIM: \(Int(dimW))x\(Int(dimH))cm
+            """
+        }
+        
+        let textGeom = SCNText(string: details, extrusionDepth: 0.05)
+        textGeom.font = UIFont.monospacedSystemFont(ofSize: 0.4, weight: .black)
+        textGeom.firstMaterial?.diffuse.contents = color
+        textGeom.firstMaterial?.emission.contents = color
+        
+        let textNode = SCNNode(geometry: textGeom)
+        textNode.scale = SCNVector3(0.012, 0.012, 0.012)
+        textNode.position = SCNVector3(0.1, 0, 0)
+        
+        // Billboard constraint so labels always face the user
+        let constraint = SCNBillboardConstraint()
+        constraint.freeAxes = .all
+        textNode.constraints = [constraint]
+        
+        boxNode.addChildNode(textNode)
+        
+        // Add wireframe box
+        let wireframe = SCNBox(width: 0.2, height: 0.2, length: 0.2, chamferRadius: 0)
+        wireframe.firstMaterial?.diffuse.contents = UIColor.clear
+        wireframe.firstMaterial?.emission.contents = color
+        let wireNode = SCNNode(geometry: wireframe)
+        boxNode.addChildNode(wireNode)
+        
+        parent.addChildNode(boxNode)
     }
     
     func session(_ session: ARSession, didFailWithError error: Error) {

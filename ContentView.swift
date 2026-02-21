@@ -42,14 +42,16 @@ struct KineprintView: View {
     
     var body: some View {
         ZStack {
+            Color.black.ignoresSafeArea() // Root opaque layer
+            
             if !viewModel.isOnboardingComplete {
                 OnboardingView(viewModel: viewModel)
                     .transition(.opacity)
             } else {
-                Color.black.ignoresSafeArea()
-                
                 VStack(spacing: 0) {
-                    TopNavigationBar(viewModel: viewModel)
+                    if selectedTab != .ar {
+                        TopNavigationBar(viewModel: viewModel)
+                    }
                     
                     ZStack {
                         switch selectedTab {
@@ -124,19 +126,14 @@ struct KineprintView: View {
         .animation(.easeInOut, value: selectedTab)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showGoodbye)
         .onChange(of: scenePhase) { newPhase in
-            if newPhase == .background || newPhase == .inactive {
-                if viewModel.isOnboardingComplete {
-                    showGoodbye = true
-                    speakGoodbye()
-                }
-            } else if newPhase == .active {
+            if newPhase == .active {
                 showGoodbye = false
                 if viewModel.isOnboardingComplete && !viewModel.isBooting {
-                    if !hasGreetedToday {
-                        hasGreetedToday = true
-                        speakWelcomeBack()
-                    }
+                    speakWelcomeBack()
                 }
+            } else if newPhase == .background {
+                // Dim the goodbye slightly - user found it too much
+                showGoodbye = false 
             }
         }
     }
@@ -181,10 +178,10 @@ struct ARScannerTab: View {
             ARCameraView(viewModel: viewModel)
             
             VStack(spacing: 0) {
-                // Top section: Motion Analysis relocated safely out of the way
+                // Top section: Motion Analysis relocated to the very top
                 MotionAnalysisDashboard(viewModel: viewModel)
                     .padding(.horizontal, 16)
-                    .padding(.top, 16)
+                    .padding(.top, 4) // Tight padding for maximum scanner space
                 
                 if viewModel.isScanning {
                     ScanningLine()
@@ -257,7 +254,30 @@ struct CustomBottomToolbar: View {
             .frame(width: 80)
             
             TabBarButton(icon: "graduationcap.fill", label: "TRAIN", tab: .training, selectedTab: $selectedTab)
-            TabBarButton(icon: "person.crop.circle.fill", label: "PROFILE", tab: .profile, selectedTab: $selectedTab)
+            
+            // Profile Tab with Dynamic Avatar
+            Button(action: { selectedTab = .profile }) {
+                VStack(spacing: 4) {
+                    Group {
+                        if let data = viewModel.profileImageData, let uiImage = UIImage(data: data) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 22, height: 22)
+                                .clipShape(Circle())
+                                .overlay(Circle().stroke(viewModel.avatarColor, lineWidth: selectedTab == .profile ? 1.5 : 0))
+                        } else {
+                            Image(systemName: viewModel.avatarType.icon)
+                                .font(.system(size: 18))
+                                .foregroundColor(selectedTab == .profile ? viewModel.avatarColor : .gray)
+                        }
+                    }
+                    Text("PROFILE")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                }
+                .foregroundColor(selectedTab == .profile ? neonCyan : .gray)
+                .frame(maxWidth: .infinity)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -605,21 +625,15 @@ struct TopNavigationBar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(alignment: .center) {
-                // App title & Greeting
+                // App title
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "scope")
-                            .foregroundColor(neonCyan)
-                            .font(.system(size: 16, weight: .bold))
-                        
-                        Text("KINEPRINT")
-                            .font(.system(size: 22, weight: .bold, design: .monospaced))
-                            .foregroundColor(neonCyan)
-                    }
+                    Text("KINEPRINT")
+                        .font(.system(size: 22, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan)
                     
                     Text("\(timeBasedGreeting), \(viewModel.userName.uppercased())")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundColor(neonCyan.opacity(0.6))
+                        .foregroundColor(viewModel.avatarColor.opacity(0.7))
                         .padding(.leading, 2)
                 }
                 
@@ -667,40 +681,60 @@ struct SidebarControls: View {
     
     var body: some View {
         VStack(spacing: 10) {
-            ControlButton(
-                symbol: "arrow.triangle.branch",
-                label: "Vectors",
-                isActive: viewModel.showVectors,
-                action: { viewModel.toggleVectors() }
-            )
+            // Master Toggle (First Icon + Chevron)
+            HStack(spacing: 4) {
+                Button(action: {
+                    withAnimation(.spring()) {
+                        viewModel.isSidebarExpanded.toggle()
+                    }
+                }) {
+                    Image(systemName: viewModel.isSidebarExpanded ? "chevron.down" : "chevron.up")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(Color(red: 0, green: 1, blue: 0.85))
+                        .padding(6)
+                        .background(Circle().fill(Color.black.opacity(0.6)))
+                }
+                
+                ControlButton(
+                    symbol: "arrow.triangle.branch",
+                    label: "Vectors",
+                    isActive: viewModel.showVectors,
+                    action: { viewModel.toggleVectors() }
+                )
+            }
             
-            ControlButton(
-                symbol: "point.topleft.down.to.point.bottomright.curvepath.fill",
-                label: "Record",
-                isActive: viewModel.recordingPath,
-                action: { viewModel.recordPath() }
-            )
-            
-            ControlButton(
-                symbol: "pause.circle",
-                label: "Freeze",
-                isActive: viewModel.freezeFrameMode,
-                action: { viewModel.freezeFrame() }
-            )
-            
-            ControlButton(
-                symbol: "trash",
-                label: "Clear",
-                isActive: false,
-                action: { viewModel.clearData() }
-            )
-            
-            ControlButton(
-                symbol: "target",
-                label: "Scan",
-                isActive: viewModel.isDeepScanning,
-                action: { viewModel.initiateDeepScan() }
-            )
+            if viewModel.isSidebarExpanded {
+                VStack(spacing: 10) {
+                    ControlButton(
+                        symbol: "point.topleft.down.to.point.bottomright.curvepath.fill",
+                        label: "Record",
+                        isActive: viewModel.recordingPath,
+                        action: { viewModel.recordPath() }
+                    )
+                    
+                    ControlButton(
+                        symbol: "pause.circle",
+                        label: "Freeze",
+                        isActive: viewModel.freezeFrameMode,
+                        action: { viewModel.freezeFrame() }
+                    )
+                    
+                    ControlButton(
+                        symbol: "trash",
+                        label: "Clear",
+                        isActive: false,
+                        action: { viewModel.clearData() }
+                    )
+                    
+                    ControlButton(
+                        symbol: "target",
+                        label: "Scan",
+                        isActive: viewModel.isDeepScanning,
+                        action: { viewModel.initiateDeepScan() }
+                    )
+                }
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
         }
     }
 }
@@ -1073,6 +1107,7 @@ class KineprintViewModel: ObservableObject {
     @Published var lastScannedEntry: ResearchEntry?
     @Published var researchEntries: [ResearchEntry] = []
     @Published var publishedPapers: [ResearchPaper] = []
+    @Published var isSidebarExpanded = false
     
     // New processing states
     @Published var isHackerProcessing = false
@@ -1082,6 +1117,20 @@ class KineprintViewModel: ObservableObject {
     
     // Personalization & State
     @AppStorage("userName") var userName: String = ""
+    @AppStorage("avatarType") var avatarType: RobotType = .robot1
+    @AppStorage("avatarColorName") var avatarColorName: String = "cyan"
+    @AppStorage("customAvatarColorHex") var customAvatarColorHex: String = "#00FFFF"
+    @AppStorage("profileImageData") var profileImageData: Data?
+    @AppStorage("useCustomColor") var useCustomColor: Bool = false
+    
+    var customAvatarColor: Color {
+        get { Color(hex: customAvatarColorHex) }
+        set { customAvatarColorHex = newValue.toHex() }
+    }
+    
+    var avatarColor: Color {
+        useCustomColor ? customAvatarColor : Color.fromName(avatarColorName)
+    }
     @AppStorage("isOnboardingComplete") var isOnboardingComplete: Bool = false
     @Published var assistantStyle: AssistantStyle = .guided
     @Published var measurementUnits: MeasurementUnits = .metric
@@ -1335,35 +1384,74 @@ class KineprintViewModel: ObservableObject {
     }
     
     private func generateBlueprintResult(image: UIImage?) {
-        // Form a detailed research entry focusing on organic and physical world assets
-        let materials = ["Biological Matrix (Carbon-based)", "Synthetic Polymer Composite", "High-Density Organic Fiber", "Silicon-infused Fabric", "Titanium Alloy Skeleton", "Carbon Fiber Mesh"]
-        let names = ["HOMINID_SUBJECT-01", "ORGANIC_ASSET", "SYNTHETIC_OBJECT", "UNKNOWN_RELIQUARY", "MECHANICAL_CONSTRUCT", "BIOSYNTHETIC_ENTITY"]
-        
-        let newId = UUID()
-        var savedPath: String? = nil
-        if let img = image {
-            savedPath = saveImageLocally(img, id: newId)
+        guard let img = image, let cgImg = img.cgImage else {
+            generateMockBlueprintResult()
+            return
         }
         
-        let newEntry = ResearchEntry(
-            id: newId,
-            date: Date(),
-            title: names.randomElement() ?? "UNKNOWN_STRUCT",
-            dimensions: "\(Double.random(in: 40...190).formatted(.number.precision(.fractionLength(4))))W x \(Double.random(in: 10...80).formatted(.number.precision(.fractionLength(4))))H cm",
-            material: materials.randomElement() ?? "Organic-Synthetic Hybrid",
-            blueprintData: "RAW_BLUEPRINT_VECTOR_\(UUID().uuidString.prefix(12))",
-            mass: "\(Double.random(in: 2.0...85.0).formatted(.number.precision(.fractionLength(3)))) kg",
-            scanQuality: "\(Double.random(in: 99.4...99.99).formatted(.number.precision(.fractionLength(2))))% METRIC PRECISION",
-            imagePath: savedPath
-        )
+        let handler = VNImageRequestHandler(cgImage: cgImg, options: [:])
+        let request = VNClassifyImageRequest { [weak self] request, error in
+            guard let results = request.results as? [VNClassificationObservation],
+                  let topResult = results.first else {
+                self?.generateMockBlueprintResult()
+                return
+            }
+            
+            let label = topResult.identifier.replacingOccurrences(of: "_", with: " ").capitalized
+            let confidence = topResult.confidence
+            
+            // Heuristic for material
+            var material = "Composite"
+            let l = label.lowercased()
+            if l.contains("person") || l.contains("human") || l.contains("face") { material = "Biological Tissue" }
+            else if l.contains("metal") || l.contains("steel") { material = "Industrial Alloy" }
+            else if l.contains("wood") { material = "Organic Cellulose" }
+            else if l.contains("plastic") { material = "High-Density Polymer" }
+            
+            DispatchQueue.main.async {
+                let newId = UUID()
+                let savedPath = self?.saveImageLocally(img, id: newId)
+                
+                let newEntry = ResearchEntry(
+                    id: newId,
+                    date: Date(),
+                    title: label.uppercased(),
+                    dimensions: "\(Double.random(in: 10...150).formatted(.number.precision(.fractionLength(2))))W x \(Double.random(in: 10...150).formatted(.number.precision(.fractionLength(2))))H cm",
+                    material: material,
+                    blueprintData: "VEC_\(UUID().uuidString.prefix(10))",
+                    mass: "\(Double.random(in: 0.1...70.0).formatted(.number.precision(.fractionLength(2)))) kg",
+                    scanQuality: "\(String(format: "%.1f", confidence * 100))% PRECISION",
+                    imagePath: savedPath
+                )
+                
+                self?.researchEntries.insert(newEntry, at: 0)
+                self?.lastScannedEntry = newEntry
+                NotificationManager.shared.scheduleScanCompleteNotification(itemName: newEntry.title)
+            }
+        }
         
-        // Prepend to show at top
-        researchEntries.insert(newEntry, at: 0)
-        lastScannedEntry = newEntry
-        
-        NotificationManager.shared.scheduleScanCompleteNotification(itemName: newEntry.title)
+        do {
+            try handler.perform([request])
+        } catch {
+            generateMockBlueprintResult()
+        }
     }
     
+    private func generateMockBlueprintResult() {
+        let newEntry = ResearchEntry(
+            id: UUID(),
+            date: Date(),
+            title: "UNKNOWN_ASSET",
+            dimensions: "45.2W x 32.1H cm",
+            material: "Organic-Synthetic Hybrid",
+            blueprintData: "RAW_BLUEPRINT_VECTOR",
+            mass: "1.24 kg",
+            scanQuality: "88.2% ESTIMATED"
+        )
+        researchEntries.insert(newEntry, at: 0)
+        lastScannedEntry = newEntry
+    }
+
     func dismissBlueprintView() {
         showCapturedBlueprint = false
     }

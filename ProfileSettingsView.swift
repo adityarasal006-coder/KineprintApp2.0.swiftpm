@@ -5,6 +5,7 @@ import SwiftUI
 #if os(iOS)
 import UIKit
 import CoreMotion
+import PhotosUI
 
 // MARK: - Profile & Settings View (Redesigned)
 
@@ -53,9 +54,6 @@ struct ProfileSettingsView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Image(systemName: "person.crop.circle.fill")
-                        .foregroundColor(neonCyan)
-                        .font(.system(size: 22, weight: .bold))
                     Spacer()
                     Text("PROFILE & SETTINGS")
                         .font(.system(size: 16, weight: .bold, design: .monospaced))
@@ -340,7 +338,10 @@ struct ProfileSettingsView: View {
 @MainActor
 struct ProfileCard: View {
     @ObservedObject var settingsManager: SettingsManager
-    @State private var isEditing = false
+    @State private var showAvatarPicker = false
+    @State private var showFullAvatarBox = false
+    @State private var selectedItem: PhotosPickerItem?
+    
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
 
     private var timeGreeting: String {
@@ -354,83 +355,340 @@ struct ProfileCard: View {
         VStack(spacing: 0) {
             // Section label
             HStack {
-                Text("USER PROFILE")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                Text("NEURAL IDENTITY")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(.gray)
                 Spacer()
+                
+                Button(action: { showAvatarPicker = true }) {
+                    Text("UPLOAD PHOTO")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(neonCyan.opacity(0.4), lineWidth: 1))
+                }
             }
-            .padding(.bottom, 16)
+            .padding(.bottom, 20)
 
-            // ── Center profile pic ──
+            // ── Main Avatar Display ──
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [neonCyan.opacity(0.25), neonCyan.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 100, height: 100)
+                    .stroke(settingsManager.avatarColor.opacity(0.3), lineWidth: 8)
+                    .frame(width: 140, height: 140)
+                    .blur(radius: 8)
 
-                Circle()
-                    .stroke(neonCyan.opacity(0.6), lineWidth: 2)
-                    .frame(width: 100, height: 100)
-
-                Image(systemName: "person.fill")
-                    .font(.system(size: 44))
-                    .foregroundColor(neonCyan)
-                    .shadow(color: neonCyan.opacity(0.6), radius: 12)
+                if let imageData = settingsManager.profileImageData, let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 120, height: 120)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(settingsManager.avatarColor, lineWidth: 2))
+                } else {
+                    RobotDisplayView(type: settingsManager.avatarType, color: settingsManager.avatarColor)
+                        .frame(width: 120, height: 120)
+                }
             }
-            .shadow(color: neonCyan.opacity(0.3), radius: 20)
             .padding(.bottom, 16)
 
-            // ── Name & greeting below pic ──
-            VStack(spacing: 6) {
+            // ── Name & greeting ──
+            VStack(spacing: 4) {
                 Text(settingsManager.userName.isEmpty ? "STUDENT" : settingsManager.userName.uppercased())
-                    .font(.system(size: 22, weight: .heavy, design: .monospaced))
+                    .font(.system(size: 24, weight: .heavy, design: .monospaced))
                     .foregroundColor(.white)
 
                 Text(timeGreeting)
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(neonCyan.opacity(0.7))
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 4)
-                    .background(neonCyan.opacity(0.08))
-                    .cornerRadius(8)
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(settingsManager.avatarColor.opacity(0.8))
             }
-            .padding(.bottom, 16)
+            .padding(.bottom, 24)
 
-            // ── Editable name field ──
-            VStack(alignment: .leading, spacing: 6) {
-                Text("PREFERRED NAME")
+            // ── Customization Controls ──
+            VStack(alignment: .leading, spacing: 16) {
+                // Robot Selection
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("ROBOT MODEL")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Button(action: { showFullAvatarBox = true }) {
+                            Text("SEE MORE")
+                                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                .foregroundColor(neonCyan)
+                        }
+                    }
+                    
+                    HStack(spacing: 12) {
+                        // Display first 3 or 4
+                        ForEach(RobotType.allModels.prefix(3), id: \.self) { type in
+                            AvatarSelectorItem(
+                                type: type,
+                                isSelected: settingsManager.avatarType == type && settingsManager.profileImageData == nil,
+                                color: settingsManager.avatarColor,
+                                action: {
+                                    settingsManager.avatarType = type
+                                    settingsManager.profileImageData = nil
+                                }
+                            )
+                        }
+                        
+                        // Remaining avatars placeholder/trigger
+                        Button(action: { showFullAvatarBox = true }) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.05))
+                                    .frame(width: 44, height: 44)
+                                Image(systemName: "plus")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                        }
+                    }
+                }
+                
+                Divider().background(Color.white.opacity(0.1))
+                
+                // Chassis Color
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("CHASSIS COLOR")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.gray)
+                    
+                    HStack(spacing: 12) {
+                        ForEach(["cyan", "orange", "pink", "green", "blue"], id: \.self) { colorName in
+                            ColorBubble(
+                                color: Color.fromName(colorName),
+                                isSelected: !settingsManager.useCustomColor && settingsManager.avatarColorName == colorName,
+                                action: {
+                                    settingsManager.useCustomColor = false
+                                    settingsManager.avatarColorName = colorName
+                                }
+                            )
+                        }
+                        
+                        // Rainbow Palette Trigger
+                        ColorPicker("", selection: Binding(
+                            get: { settingsManager.customAvatarColor },
+                            set: { 
+                                settingsManager.customAvatarColor = $0 
+                                settingsManager.useCustomColor = true
+                            }
+                        ))
+                            .background(
+                                AngularGradient(
+                                    gradient: Gradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red]),
+                                    center: .center
+                                )
+                                .clipShape(Circle())
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: settingsManager.useCustomColor ? 2 : 0)
+                            )
+                    }
+                }
+            }
+            .padding(.bottom, 24)
+
+            // ── Name Field ──
+            VStack(alignment: .leading, spacing: 8) {
+                Text("NEURAL SIGNATURE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
                     .foregroundColor(.gray)
 
+                TextField("Enter Identity", text: $settingsManager.userName)
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .foregroundColor(settingsManager.avatarColor)
+                    .padding(.vertical, 12)
+                    .padding(.horizontal, 16)
+                    .background(Color.black.opacity(0.5))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(settingsManager.avatarColor.opacity(0.3), lineWidth: 1)
+                    )
+            }
+        }
+        .padding(24)
+        .background(.ultraThinMaterial.opacity(0.9))
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(settingsManager.avatarColor.opacity(0.2), lineWidth: 1)
+        )
+        // Full Avatar Box Pop-up
+        .sheet(isPresented: $showFullAvatarBox) {
+            FullAvatarBoxView(settingsManager: settingsManager, isPresented: $showFullAvatarBox)
+        }
+        // Gallery Picker Pop-up
+        .sheet(isPresented: $showAvatarPicker) {
+            PhotoIdentitySheet(settingsManager: settingsManager, isPresented: $showAvatarPicker, selectedItem: $selectedItem)
+        }
+    }
+}
+
+// MARK: - Sub-components for ProfileCard
+
+struct AvatarSelectorItem: View {
+    let type: RobotType
+    let isSelected: Bool
+    let color: Color
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .fill(isSelected ? color : Color.white.opacity(0.05))
+                    .frame(width: 44, height: 44)
+                
+                // Show the robot image cutout even in the selector
+                Image(type.imageName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 30, height: 30)
+                    .scaleEffect(isSelected ? 0.9 : 0.8)
+                    .colorInvert()
+                    .blendMode(isSelected ? .destinationOut : .screen) // Cool visual effect
+            }
+        }
+    }
+}
+
+struct ColorBubble: View {
+    let color: Color
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Circle()
+                .fill(color)
+                .frame(width: 26, height: 26)
+                .overlay(
+                    Circle()
+                        .stroke(Color.white, lineWidth: isSelected ? 2 : 0)
+                )
+                .shadow(color: color.opacity(0.4), radius: isSelected ? 5 : 0)
+        }
+    }
+}
+
+struct FullAvatarBoxView: View {
+    @ObservedObject var settingsManager: SettingsManager
+    @Binding var isPresented: Bool
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 24) {
                 HStack {
-                    TextField("Enter your name", text: $settingsManager.userName)
-                        .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    Text("AVATAR SUITE")
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
                         .foregroundColor(neonCyan)
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 14)
-                        .background(Color.black.opacity(0.5))
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(neonCyan.opacity(0.3), lineWidth: 1)
-                        )
+                    Spacer()
+                    Button(action: { isPresented = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.gray)
+                    }
+                }
+                .padding(.horizontal, 30)
+                .padding(.top, 40)
+                
+                Text("Select your primary neural interface from the factory archives.")
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(.gray)
+                    .padding(.horizontal, 40)
+                    .multilineTextAlignment(.center)
+
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 20) {
+                        ForEach(RobotType.allModels, id: \.self) { type in
+                            Button(action: {
+                                settingsManager.avatarType = type
+                                settingsManager.profileImageData = nil
+                                isPresented = false
+                            }) {
+                                VStack {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.05))
+                                            .frame(width: 90, height: 90)
+                                        
+                                        Image(type.imageName)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .padding(15)
+                                            .colorInvert()
+                                            .blendMode(.screen)
+                                    }
+                                    Text(type.rawValue.uppercased())
+                                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                        .foregroundColor(settingsManager.avatarType == type ? neonCyan : .gray)
+                                }
+                            }
+                        }
+                    }
+                    .padding(30)
                 }
             }
         }
-        .padding(20)
-        .background(.ultraThinMaterial.opacity(0.85))
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(neonCyan.opacity(0.2), lineWidth: 1)
-        )
     }
 }
+
+struct PhotoIdentitySheet: View {
+    @ObservedObject var settingsManager: SettingsManager
+    @Binding var isPresented: Bool
+    @Binding var selectedItem: PhotosPickerItem?
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text("IDENTITY UPLOAD")
+                .font(.system(size: 18, weight: .bold, design: .monospaced))
+                .foregroundColor(neonCyan)
+                .padding(.top, 40)
+            
+            Text("Select a photo to bypass the factory robot models and use your own biological signature.")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
+                Label("SELECT FROM GALLERY", systemImage: "photo.on.rectangle.angled")
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .foregroundColor(.black)
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(neonCyan)
+                    .cornerRadius(12)
+                    .padding(.horizontal, 40)
+            }
+            .onChange(of: selectedItem) { newItem in
+                Task {
+                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                        settingsManager.profileImageData = data
+                        isPresented = false
+                    }
+                }
+            }
+            
+            Button("CANCEL") { isPresented = false }
+                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .foregroundColor(.gray)
+                .padding(.top, 10)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.black)
+    }
+}
+
 
 // MARK: - Reusable Settings Section
 
@@ -578,7 +836,22 @@ enum LiDARDensity: String, CaseIterable, Hashable {
 
 @MainActor
 class SettingsManager: ObservableObject {
-    @AppStorage("settingsUserName") var userName: String = "Engineering Student"
+    @AppStorage("userName") var userName: String = "Engineering Student"
+    @AppStorage("avatarType") var avatarType: RobotType = .robot1
+    @AppStorage("avatarColorName") var avatarColorName: String = "cyan"
+    @AppStorage("customAvatarColorHex") var customAvatarColorHex: String = "#00FFFF"
+    @AppStorage("profileImageData") var profileImageData: Data?
+    @AppStorage("useCustomColor") var useCustomColor: Bool = false
+    
+    var customAvatarColor: Color {
+        get { Color(hex: customAvatarColorHex) }
+        set { customAvatarColorHex = newValue.toHex() }
+    }
+    
+    var avatarColor: Color {
+        useCustomColor ? customAvatarColor : Color.fromName(avatarColorName)
+    }
+    
     @Published var measurementUnits: MeasurementUnits = .metric
     @Published var temperatureUnit: TemperatureUnit = .celsius
     @Published var renderingQuality: RenderingQuality = .balanced

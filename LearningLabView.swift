@@ -12,12 +12,24 @@ struct LearningLabView: View {
     @State private var showVelocityGame = false
     @State private var showOscillationGame = false
     @State private var showLandingGame = false
+    @State private var showMomentumGame = false
+    @State private var showCollisionGame = false
+    @State private var showCentripetalGame = false
+    @State private var showEnergyGame = false
+
     @State private var trajectoryScore = 0
     @State private var velocityScore = 0
     @State private var oscillationScore = 0
     @State private var landingScore = 0
+    @State private var momentumScore = 0
+    @State private var collisionScore = 0
+    @State private var centripetalScore = 0
+    @State private var energyScore = 0
     
-    private var totalGameScore: Int { trajectoryScore + velocityScore + oscillationScore + landingScore }
+    private var totalGameScore: Int { 
+        trajectoryScore + velocityScore + oscillationScore + landingScore + 
+        momentumScore + collisionScore + centripetalScore + energyScore 
+    }
     
     var body: some View {
         ZStack {
@@ -37,33 +49,8 @@ struct LearningLabView: View {
                 }
                 .ignoresSafeArea()
                 
-                VStack {
-                    // Header
-                    HStack {
-                        Image(systemName: "graduationcap.fill")
-                            .foregroundColor(neonCyan)
-                            .font(.system(size: 24, weight: .bold))
-                        
-                        Spacer()
-                        
-                        Text("LEARNING LAB")
-                            .font(.system(size: 18, weight: .bold, design: .monospaced))
-                            .foregroundColor(neonCyan)
-                        
-                        Spacer()
-                        
-                        // Total score display
-                        VStack(alignment: .trailing, spacing: 1) {
-                            Text("TOTAL")
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
-                            Text("\(totalGameScore)")
-                                .font(.system(size: 16, weight: .heavy, design: .monospaced))
-                                .foregroundColor(neonCyan)
-                        }
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
+                VStack(spacing: 16) {
+                    // Removed redundant header to fix "nonsense" layout overlap
                     
                     // Challenge Selection — each button opens its game
                     ChallengeSelectionView(
@@ -71,18 +58,28 @@ struct LearningLabView: View {
                         onSelectTrajectory: { showTrajectoryGame = true },
                         onSelectVelocity: { showVelocityGame = true },
                         onSelectOscillation: { showOscillationGame = true },
-                        onSelectLanding: { showLandingGame = true }
+                        onSelectLanding: { showLandingGame = true },
+                        onSelectMomentum: { showMomentumGame = true },
+                        onSelectCollision: { showCollisionGame = true },
+                        onSelectCentripetal: { showCentripetalGame = true },
+                        onSelectEnergy: { showEnergyGame = true }
                     )
                     
-                    // Current Challenge Display
-                    CurrentChallengeView(challenge: challengeManager.currentChallenge, challengeManager: challengeManager)
-                    
-                    // Performance Metrics
-                    PerformanceMetricsView(challengeManager: challengeManager)
-                    
-                    Spacer()
+                    ScrollView {
+                        VStack(spacing: 20) {
+                            // Current Challenge Display
+                            CurrentChallengeView(challenge: challengeManager.currentChallenge, challengeManager: challengeManager)
+                            
+                            // Performance Metrics
+                            PerformanceMetricsView(challengeManager: challengeManager)
+                            
+                            // Physics Insights Section
+                            PhysicsInsightView(challengeManager: challengeManager)
+                            
+                            Spacer().frame(height: 80)
+                        }
+                    }
                 }
-                .padding(.top, 10)
             }
         .preferredColorScheme(.dark)
         .fullScreenCover(isPresented: $showTrajectoryGame) {
@@ -97,6 +94,18 @@ struct LearningLabView: View {
         .fullScreenCover(isPresented: $showLandingGame) {
             LandingGameView(score: $landingScore)
         }
+        .fullScreenCover(isPresented: $showMomentumGame) {
+            MomentumGameView(score: $momentumScore)
+        }
+        .fullScreenCover(isPresented: $showCollisionGame) {
+            CollisionGameView(score: $collisionScore)
+        }
+        .fullScreenCover(isPresented: $showCentripetalGame) {
+            CentripetalGameView(score: $centripetalScore)
+        }
+        .fullScreenCover(isPresented: $showEnergyGame) {
+            EnergyGameView(score: $energyScore)
+        }
     }
 }
 
@@ -107,6 +116,10 @@ struct ChallengeSelectionView: View {
     let onSelectVelocity: () -> Void
     let onSelectOscillation: () -> Void
     let onSelectLanding: () -> Void
+    let onSelectMomentum: () -> Void
+    let onSelectCollision: () -> Void
+    let onSelectCentripetal: () -> Void
+    let onSelectEnergy: () -> Void
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
@@ -119,55 +132,56 @@ struct ChallengeSelectionView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ChallengeButtonView(
-                        type: .matchTrajectory,
-                        isSelected: challengeManager.selectedChallengeType == .matchTrajectory,
-                        action: {
-                            challengeManager.selectChallenge(.matchTrajectory)
-                            onSelectTrajectory()
-                        }
-                    )
-                    ChallengeButtonView(
-                        type: .optimizeVelocity,
-                        isSelected: challengeManager.selectedChallengeType == .optimizeVelocity,
-                        action: {
-                            challengeManager.selectChallenge(.optimizeVelocity)
-                            onSelectVelocity()
-                        }
-                    )
-                    ChallengeButtonView(
-                        type: .stabilizeOscillation,
-                        isSelected: challengeManager.selectedChallengeType == .stabilizeOscillation,
-                        action: {
-                            challengeManager.selectChallenge(.stabilizeOscillation)
-                            onSelectOscillation()
-                        }
-                    )
-                    ChallengeButtonView(
-                        type: .landingPrediction,
-                        isSelected: challengeManager.selectedChallengeType == .landingPrediction,
-                        action: {
-                            challengeManager.selectChallenge(.landingPrediction)
-                            onSelectLanding()
-                        }
-                    )
+                    ForEach(ChallengeType.allCases, id: \.self) { type in
+                        ChallengeButtonView(
+                            type: type,
+                            isSelected: challengeManager.selectedChallengeType == type,
+                            action: {
+                                challengeManager.selectChallenge(type)
+                                handleSelection(type)
+                            }
+                        )
+                    }
                 }
                 .padding(.horizontal, 16)
             }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, 14)
         .background(
-            VisualEffectBlur(blurStyle: .systemUltraThinMaterialDark) {
-                Rectangle().fill(Color.clear)
+            ZStack {
+                Color.black.opacity(0.6)
+                // Decorative diagonal lines
+                GeometryReader { geo in
+                    Path { p in
+                        for i in 0..<10 {
+                            let x = CGFloat(i) * 50
+                            p.move(to: CGPoint(x: x, y: 0))
+                            p.addLine(to: CGPoint(x: x + 100, y: geo.size.height))
+                        }
+                    }
+                    .stroke(neonCyan.opacity(0.05), lineWidth: 1)
+                }
             }
-            .opacity(0.85)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(neonCyan.opacity(0.15), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(neonCyan.opacity(0.2), lineWidth: 1)
         )
         .padding(.horizontal, 16)
+    }
+    
+    private func handleSelection(_ type: ChallengeType) {
+        switch type {
+        case .matchTrajectory: onSelectTrajectory()
+        case .optimizeVelocity: onSelectVelocity()
+        case .stabilizeOscillation: onSelectOscillation()
+        case .landingPrediction: onSelectLanding()
+        case .momentumTransfer: onSelectMomentum()
+        case .elasticCollision: onSelectCollision()
+        case .centripetalForce: onSelectCentripetal()
+        case .kineticEnergy: onSelectEnergy()
+        }
     }
 }
 
@@ -414,7 +428,60 @@ struct MetricCard: View {
     }
 }
 
-// MARK: - Challenge Models and Manager
+@available(iOS 16.0, *)
+struct PhysicsInsightView: View {
+    @ObservedObject var challengeManager: ChallengeManager
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .foregroundColor(.yellow)
+                Text("PHYSICS INSIGHT")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(neonCyan)
+                Spacer()
+            }
+            
+            Text(currentInsight)
+                .font(.system(size: 13, design: .monospaced))
+                .foregroundColor(.white.opacity(0.9))
+                .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .id(challengeManager.selectedChallengeType)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.blue.opacity(0.1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(neonCyan.opacity(0.3), lineWidth: 1)
+                )
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .animation(.spring(), value: challengeManager.selectedChallengeType)
+    }
+    
+    private var currentInsight: String {
+        guard let type = challengeManager.selectedChallengeType else {
+            return "Select a challenge to receive expert physics insights and master the laws of motion."
+        }
+        switch type {
+        case .matchTrajectory: return "Did you know? Projectiles follow a parabolic path because gravity only acts vertically, creating constant vertical acceleration while horizontal velocity remains constant."
+        case .optimizeVelocity: return "Velocity is a vector quantity. To optimize, you must manage both magnitude (speed) and direction perfectly. Smooth transitions reduce energy loss."
+        case .stabilizeOscillation: return "Damping is the process of reducing oscillation amplitude. In engineering, critical damping prevents overshoot and reaches equilibrium fastest."
+        case .landingPrediction: return "Air resistance (drag) significantly affects long-range trajectories. For heavy objects, the impact of drag is lower relative to their inertia."
+        case .momentumTransfer: return "Momentum (p = mv) is always conserved in a closed system. Impulse is the change in momentum caused by a force applied over time."
+        case .elasticCollision: return "In a perfectly elastic collision, both momentum and kinetic energy are conserved. Real-world collisions are usually 'partially inelastic'."
+        case .centripetalForce: return "Centripetal force is not a 'new' force, but a requirement for circular motion, provided by tension, gravity, or friction toward the center."
+        case .kineticEnergy: return "Kinetic Energy increases with the square of velocity (KE = ½mv²). Doubling your speed quadruples the energy required!"
+        }
+    }
+}
 
 @available(iOS 16.0, *)
 enum ChallengeType: String, CaseIterable {
@@ -422,6 +489,10 @@ enum ChallengeType: String, CaseIterable {
     case optimizeVelocity = "Optimize Velocity"
     case stabilizeOscillation = "Stabilize Oscillation"
     case landingPrediction = "Predict Landing Point"
+    case momentumTransfer = "Momentum Transfer"
+    case elasticCollision = "Elastic Collision"
+    case centripetalForce = "Centripetal Force"
+    case kineticEnergy = "Kinetic Energy"
     
     var icon: String {
         switch self {
@@ -429,6 +500,10 @@ enum ChallengeType: String, CaseIterable {
         case .optimizeVelocity: return "speedometer"
         case .stabilizeOscillation: return "waveform.path.ecg"
         case .landingPrediction: return "location.magnifyingglass"
+        case .momentumTransfer: return "arrow.right.to.line.compact"
+        case .elasticCollision: return "arrow.up.and.down.and.sparkles"
+        case .centripetalForce: return "rotate.right.fill"
+        case .kineticEnergy: return "bolt.batteryblock.fill"
         }
     }
 }
@@ -466,36 +541,23 @@ class ChallengeManager: ObservableObject {
     func selectChallenge(_ type: ChallengeType) {
         selectedChallengeType = type
         
-        // Create a new challenge based on the type
         switch type {
         case .matchTrajectory:
-            currentChallenge = Challenge(
-                type: type,
-                title: "MATCH THE TRAJECTORY",
-                description: "Follow the target path as closely as possible using proper kinematic motion",
-                targetValue: 1.0
-            )
+            currentChallenge = Challenge(type: type, title: "MATCH THE TRAJECTORY", description: "Follow the target path as closely as possible using proper kinematic motion", targetValue: 1.0)
         case .optimizeVelocity:
-            currentChallenge = Challenge(
-                type: type,
-                title: "OPTIMIZE VELOCITY",
-                description: "Achieve the target velocity with minimal deviation",
-                targetValue: 2.5
-            )
+            currentChallenge = Challenge(type: type, title: "OPTIMIZE VELOCITY", description: "Achieve the target velocity with minimal deviation", targetValue: 2.5)
         case .stabilizeOscillation:
-            currentChallenge = Challenge(
-                type: type,
-                title: "STABILIZE OSCILLATION",
-                description: "Minimize oscillation to achieve steady-state motion",
-                targetValue: 0.1
-            )
+            currentChallenge = Challenge(type: type, title: "STABILIZE OSCILLATION", description: "Minimize oscillation to achieve steady-state motion", targetValue: 0.1)
         case .landingPrediction:
-            currentChallenge = Challenge(
-                type: type,
-                title: "PREDICT LANDING POINT",
-                description: "Calculate and reach the predicted landing point",
-                targetValue: 5.0
-            )
+            currentChallenge = Challenge(type: type, title: "PREDICT LANDING POINT", description: "Calculate and reach the predicted landing point", targetValue: 5.0)
+        case .momentumTransfer:
+            currentChallenge = Challenge(type: type, title: "MOMENTUM TRANSFER", description: "Calculate impulse needed for a perfect transfer of momentum", targetValue: 15.0)
+        case .elasticCollision:
+            currentChallenge = Challenge(type: type, title: "ELASTIC COLLISION", description: "Analyze energy conservation during a perfect elastic bounce", targetValue: 1.0)
+        case .centripetalForce:
+            currentChallenge = Challenge(type: type, title: "CENTRIPETAL FORCE", description: "Maintain constant acceleration toward the central pivot", targetValue: 9.8)
+        case .kineticEnergy:
+            currentChallenge = Challenge(type: type, title: "KINETIC ENERGY", description: "Maximize energy efficiency through velocity management", targetValue: 50.0)
         }
     }
     
@@ -525,42 +587,26 @@ class ChallengeManager: ObservableObject {
     private func updateChallengeProgress() {
         guard var challenge = currentChallenge else { return }
         
-        // Simulate progress updates based on the challenge type
-        
         switch challenge.type {
-        case .matchTrajectory:
-            // Simulate following a trajectory
-            challenge.currentValue = min(challenge.currentValue + Float.random(in: 0.01...0.03), challenge.targetValue)
+        case .matchTrajectory, .landingPrediction, .momentumTransfer, .kineticEnergy:
+            challenge.currentValue = min(challenge.currentValue + Float.random(in: 0.01...0.05), challenge.targetValue)
             challenge.progress = min(challenge.currentValue / challenge.targetValue, 1.0)
-            
-        case .optimizeVelocity:
-            // Simulate approaching target velocity
-            let targetVel = challenge.targetValue
-            let diff = targetVel - challenge.currentValue
-            challenge.currentValue += diff * 0.05 // Approach target gradually
-            challenge.progress = min(abs(challenge.currentValue - targetVel) / targetVel, 1.0)
-            
-        case .stabilizeOscillation:
-            // Simulate reducing oscillation
-            challenge.currentValue = max(challenge.currentValue - Float.random(in: 0.001...0.005), 0.0)
+        case .optimizeVelocity, .centripetalForce:
+            let target = challenge.targetValue
+            let diff = target - challenge.currentValue
+            challenge.currentValue += diff * 0.05
+            challenge.progress = min(abs(challenge.currentValue - target) / target, 1.0)
+        case .stabilizeOscillation, .elasticCollision:
+            challenge.currentValue = max(challenge.currentValue - Float.random(in: 0.001...0.01), 0.0)
             challenge.progress = 1.0 - min(challenge.currentValue / challenge.targetValue, 1.0)
-            
-        case .landingPrediction:
-            // Simulate approaching landing prediction
-            challenge.currentValue = min(challenge.currentValue + Float.random(in: 0.02...0.05), challenge.targetValue)
-            challenge.progress = min(challenge.currentValue / challenge.targetValue, 1.0)
         }
         
-        // Update performance metrics
         updatePerformanceMetrics()
-        
-        // Check if challenge is completed
-        challenge.isCompleted = challenge.progress >= 1.0
+        challenge.isCompleted = challenge.progress >= 0.99
         currentChallenge = challenge
     }
     
     private func updatePerformanceMetrics() {
-        // Update performance metrics based on current challenge progress
         performanceMetrics.accuracy = min(performanceMetrics.accuracy + Float.random(in: 0.001...0.005), 1.0)
         performanceMetrics.smoothness = min(performanceMetrics.smoothness + Float.random(in: 0.001...0.005), 1.0)
         performanceMetrics.efficiency = min(performanceMetrics.efficiency + Float.random(in: 0.001...0.005), 1.0)

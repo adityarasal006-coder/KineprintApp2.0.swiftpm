@@ -30,6 +30,7 @@ struct OscillationGameView: View {
     @State private var showResult = false
     @State private var streak = 0
     @State private var currentAmplitude: Double = 1.0
+    @State private var thinkingLog: [String] = ["SYSTEM_IDLE", "AWAITING_TUNING"]
     
     private var naturalFrequency: Double { sqrt(springK / mass) }
     private var criticalDamping: Double { 2.0 * sqrt(springK * mass) }
@@ -40,6 +41,7 @@ struct OscillationGameView: View {
             Color.black.ignoresSafeArea()
             
             VStack(spacing: 0) {
+                // Header
                 GameHeader(
                     title: "STABILIZE OSCILLATION",
                     icon: "waveform.path",
@@ -60,76 +62,104 @@ struct OscillationGameView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 
-                ScrollView {
-                    VStack(spacing: 20) {
-                        // Damping ratio display
+                // Advanced Dynamic HUD
+                ZStack {
+                    GeometryReader { geo in
+                        GridBackground(color: neonCyan, size: geo.size)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 14) {
+                        // Diagnostic Panel
                         HStack {
-                            DampingRatioView(ratio: dampingRatio)
+                            VStack(alignment: .leading, spacing: 6) {
+                                Label("SYSTEM_DIAGNOSTICS", systemImage: "waveform.path")
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundColor(neonCyan)
+                                
+                                DampingRatioHUD(ratio: dampingRatio)
+                            }
+                            .padding(12)
+                            .background(Color.black.opacity(0.6))
+                            .border(neonCyan.opacity(0.3), width: 1)
+                            
                             Spacer()
+                            
+                            // Thinking Log
                             VStack(alignment: .trailing, spacing: 4) {
-                                Text("AMPLITUDE")
-                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                Text("SENSOR_FEED: ACTIVE")
+                                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.green)
+                                
+                                ForEach(thinkingLog, id: \.self) { log in
+                                    Text("> \(log)")
+                                        .font(.system(size: 8, design: .monospaced))
+                                        .foregroundColor(neonCyan.opacity(0.7))
+                                }
+                            }
+                            .frame(width: 160, alignment: .trailing)
+                        }
+                        .padding(.horizontal)
+                        
+                        // Spring-Mass Stage
+                        HStack(spacing: 20) {
+                            SpringMassView(
+                                displacement: currentAmplitude,
+                                isSettled: settled,
+                                color: neonCyan
+                            )
+                            .frame(width: 140)
+                            
+                            // Real-time Waveform (Scientist Style)
+                            VStack(alignment: .leading) {
+                                Text("WAVE_DECAY_ANALYSIS")
+                                    .font(.system(size: 7, weight: .bold, design: .monospaced))
                                     .foregroundColor(.gray)
-                                Text(String(format: "%.3f", currentAmplitude))
-                                    .font(.system(size: 22, weight: .heavy, design: .monospaced))
-                                    .foregroundColor(currentAmplitude < settleTolerance ? neonGreen : neonCyan)
+                                WaveformView(points: wavePoints, settled: settled, color: neonCyan)
+                                    .frame(height: 120)
                             }
                         }
-                        .padding(14)
-                        .background(Color.white.opacity(0.04))
-                        .cornerRadius(14)
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.15), lineWidth: 0.5))
+                        .padding(.horizontal)
                         
-                        // Spring-mass visualization
-                        SpringMassView(
-                            displacement: currentAmplitude,
-                            isSettled: settled,
-                            color: neonCyan
-                        )
-                        
-                        // Waveform
-                        WaveformView(points: wavePoints, settled: settled, color: neonCyan)
-                            .frame(height: 90)
+                        // Energy Monitor
+                        EnergyMonitorView(displacement: currentAmplitude, k: springK, m: mass, v: 0)
+                            .padding(.horizontal)
                         
                         // Controls
-                        VStack(spacing: 14) {
-                            PhysicsSlider(label: "DAMPING COEFF (b)", value: $damping, range: 0.01...20, unit: "N·s/m", color: neonPurple)
-                            PhysicsSlider(label: "SPRING CONSTANT (k)", value: $springK, range: 0.5...20, unit: "N/m", color: neonCyan)
-                            PhysicsSlider(label: "MASS (m)", value: $mass, range: 0.5...10, unit: "kg", color: neonGreen)
+                        VStack(spacing: 16) {
+                            ScientificSlider(label: "DAMPING_FORCE", value: $damping, range: 0.1...25, unit: "N·s/m", color: .purple)
+                            ScientificSlider(label: "SPRING_STIFFNESS", value: $springK, range: 1...30, unit: "N/m", color: neonCyan)
+                            ScientificSlider(label: "SYSTEM_MASS", value: $mass, range: 0.5...15, unit: "kg", color: neonGreen)
                         }
-                        .padding(14)
-                        .background(Color.white.opacity(0.03))
-                        .cornerRadius(14)
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.1), lineWidth: 0.5))
+                        .padding(18)
+                        .background(Color.white.opacity(0.04))
+                        .cornerRadius(18)
+                        .overlay(RoundedRectangle(cornerRadius: 18).stroke(neonCyan.opacity(0.1), lineWidth: 1))
+                        .padding(.horizontal)
                         .onChange(of: damping) { _ in resetSimulation() }
                         .onChange(of: springK) { _ in resetSimulation() }
                         .onChange(of: mass) { _ in resetSimulation() }
                         
-                        // Start button
+                        // Action
                         if !showResult {
                             Button(action: isRunning ? stopTimer : startSimulation) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: isRunning ? "stop.circle.fill" : "play.circle.fill")
-                                        .font(.system(size: 22))
-                                    Text(isRunning ? "STOP" : "START SIMULATION")
-                                        .font(.system(size: 15, weight: .bold, design: .monospaced))
-                                }
-                                .foregroundColor(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(isRunning ? Color.orange : neonCyan)
-                                .cornerRadius(14)
-                                .shadow(color: neonCyan.opacity(0.3), radius: 10)
+                                Text(isRunning ? "RECORDING_DATA..." : "STABILIZE_HARMONIC_SYSTEM")
+                                    .font(.system(size: 14, weight: .black, design: .monospaced))
+                                    .foregroundColor(.black)
+                                    .padding(.vertical, 18)
+                                    .frame(maxWidth: .infinity)
+                                    .background(isRunning ? Color.orange : neonCyan)
+                                    .cornerRadius(12)
+                                    .shadow(color: (isRunning ? Color.orange : neonCyan).opacity(0.3), radius: 10)
                             }
+                            .padding(.horizontal)
                         }
                         
                         if showResult {
                             OscillationResultView(settled: settled, dampingRatio: dampingRatio, onRetry: resetAll, onNext: nextLevel)
+                                .padding(.horizontal)
                         }
-                        
-                        Spacer().frame(height: 20)
                     }
-                    .padding(16)
+                    .padding(.vertical)
                 }
             }
         }
@@ -141,87 +171,107 @@ struct OscillationGameView: View {
     private func startSimulation() {
         wavePoints = []; elapsed = 0; currentAmplitude = 1.0 + Double(level) * 0.3
         isRunning = true; showResult = false; settled = false
+        updateLog("ENGAGING_SPRINT_LINK...")
         let initAmp = currentAmplitude
         let b = damping, k = springK, m = mass
         var newLocalElapsed = 0.0
         let settleTol = settleTolerance
         timer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { _ in
-            newLocalElapsed += 0.04
-            let t = newLocalElapsed
-            let decay = exp(-b * t / (2 * m))
-            let omega2 = k / m - (b * b) / (4 * m * m)
-            let x: Double = omega2 > 0 ? initAmp * decay * cos(sqrt(omega2) * t) : initAmp * decay
-            let newAmplitude = abs(x)
-            let didSettle = newAmplitude < settleTol && t > 0.5
-            let didTimeout = t > 12.0
-            DispatchQueue.main.async {
-                elapsed = t
-                currentAmplitude = newAmplitude
-                wavePoints.append(x)
-                if wavePoints.count > 150 { wavePoints.removeFirst() }
+            Task { @MainActor in
+                newLocalElapsed += 0.04
+                let t = newLocalElapsed
+                let decay = exp(-b * t / (2 * m))
+                let omega2 = k / m - (b * b) / (4 * m * m)
+                let x: Double = omega2 > 0 ? initAmp * decay * cos(sqrt(omega2) * t) : initAmp * decay
+                let newAmplitude = abs(x)
+                let didSettle = newAmplitude < settleTol && t > 0.5
+                let didTimeout = t > 12.0
+                
+                self.elapsed = t
+                self.currentAmplitude = newAmplitude
+                self.wavePoints.append(x)
+                if self.wavePoints.count > 150 { self.wavePoints.removeFirst() }
                 if didSettle {
-                    settled = true
-                    stopTimer()
-                    let pts = max(10, Int((1.0 - elapsed / 10.0) * 100)) * level
-                    totalScore += pts
-                    score = totalScore
-                    streak += 1
-                    showResult = true
+                    self.settled = true
+                    self.stopTimer()
+                    self.updateLog("STABILITY_DETECTED: SUCCESS")
+                    let pts = max(10, Int((1.0 - self.elapsed / 10.0) * 100)) * self.level
+                    self.totalScore += pts
+                    self.score = self.totalScore; self.streak += 1; self.showResult = true
                 } else if didTimeout {
-                    stopTimer()
-                    settled = false; streak = 0
-                    showResult = true
+                    self.stopTimer()
+                    self.updateLog("COMPUTE_TIMEOUT: FAILURE")
+                    self.settled = false; self.streak = 0; self.showResult = true
                 }
             }
         }
     }
     
-    private func stopTimer() { timer?.invalidate(); isRunning = false }
+    private func updateLog(_ msg: String) {
+        withAnimation {
+            thinkingLog.append(msg)
+            if thinkingLog.count > 3 { thinkingLog.removeFirst() }
+        }
+    }
     
+    private func stopTimer() { timer?.invalidate(); isRunning = false }
     private func resetSimulation() {
         stopTimer(); wavePoints = []; elapsed = 0; currentAmplitude = 1.0 + Double(level) * 0.3
         settled = false; showResult = false
     }
-    
     private func resetAll() { level = max(1, level); resetSimulation() }
-    private func nextLevel() { level = min(level + 1, 5); resetSimulation() }
+    private func nextLevel() { level = min(level + 1, 5); resetSimulation(); updateLog("RECONFIGURING_LEVEL_\(level)") }
 }
 
 // MARK: - Supporting Views
 
-@MainActor
 @available(iOS 16.0, *)
-struct DampingRatioView: View {
+struct DampingRatioHUD: View {
     let ratio: Double
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
-    var statusText: String {
-        if ratio < 1.0 { return "UNDER-DAMPED" }
-        else if ratio == 1.0 { return "CRITICAL" }
-        else { return "OVER-DAMPED" }
-    }
-    var statusColor: Color {
-        if ratio < 0.5 { return .red }
-        else if ratio < 1.0 { return .orange }
-        else { return .green }
-    }
-    
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("DAMPING RATIO (ζ)")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(.gray)
-            Text(String(format: "ζ = %.3f", ratio))
-                .font(.system(size: 22, weight: .heavy, design: .monospaced))
+        VStack(alignment: .leading, spacing: 2) {
+            Text("RATIO_ZETA: \(String(format: "%.3f", ratio))")
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
                 .foregroundColor(neonCyan)
-            Text(statusText)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(statusColor)
+            Text(ratio < 1.0 ? "STATUS: UNDERDAMPED" : (ratio == 1.0 ? "STATUS: CRITICAL" : "STATUS: OVERDAMPED"))
+                .font(.system(size: 8, design: .monospaced))
+                .foregroundColor(ratio < 1.0 ? .orange : .green)
         }
     }
 }
 
-@MainActor
+@available(iOS 16.0, *)
+struct EnergyMonitorView: View {
+    let displacement: Double
+    let k: Double
+    let m: Double
+    let v: Double
+    
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        let potential = 0.5 * k * displacement * displacement
+        VStack(alignment: .leading, spacing: 4) {
+            Text("ENERGY_DYNAMICS (Joules)")
+                .font(.system(size: 7, weight: .bold, design: .monospaced))
+                .foregroundColor(.gray)
+            
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.1))
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(neonCyan)
+                        .frame(width: geo.size.width * min(1.0, potential / 20.0))
+                }
+            }
+            .frame(height: 6)
+        }
+    }
+}
+
 @available(iOS 16.0, *)
 struct SpringMassView: View {
     let displacement: Double
@@ -231,51 +281,36 @@ struct SpringMassView: View {
     var body: some View {
         GeometryReader { geo in
             let centerX = geo.size.width / 2
-            let baseY = 20.0
-            let massY = baseY + 50.0 + displacement * 30.0
+            let baseY = 10.0
+            let massY = baseY + 60.0 + displacement * 40.0
             
             ZStack {
-                // Spring zigzag
                 Path { path in
                     path.move(to: CGPoint(x: centerX, y: baseY))
-                    let segments = 8
-                    for i in 0..<segments {
-                        let y = baseY + (massY - baseY - 20) / Double(segments) * Double(i + 1)
-                        let xOffset: Double = (i % 2 == 0) ? 15 : -15
+                    for i in 0..<10 {
+                        let y = baseY + (massY - baseY - 20) / 10.0 * Double(i + 1)
+                        let xOffset: Double = (i % 2 == 0) ? 12 : -12
                         path.addLine(to: CGPoint(x: centerX + xOffset, y: y))
                     }
                     path.addLine(to: CGPoint(x: centerX, y: massY - 20))
                 }
-                .stroke(isSettled ? Color.green : color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .stroke(isSettled ? Color.green : color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
                 
-                // Fixed ceiling
-                Rectangle()
-                    .fill(color.opacity(0.4))
-                    .frame(width: 80, height: 4)
-                    .position(x: centerX, y: baseY)
+                Rectangle().fill(color.opacity(0.4)).frame(width: 60, height: 2).position(x: centerX, y: baseY)
                 
-                // Mass block
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: 4)
                     .fill(isSettled ? Color.green : color)
-                    .frame(width: 40, height: 30)
+                    .frame(width: 32, height: 24)
                     .position(x: centerX, y: massY)
-                    .shadow(color: (isSettled ? Color.green : color).opacity(0.5), radius: 8)
-                
-                // Equilibrium line
-                Path { p in
-                    p.move(to: CGPoint(x: centerX - 60, y: baseY + 80))
-                    p.addLine(to: CGPoint(x: centerX + 60, y: baseY + 80))
-                }
-                .stroke(Color.gray.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                    .shadow(color: (isSettled ? Color.green : color).opacity(0.5), radius: 6)
             }
         }
         .frame(height: 140)
-        .background(Color.white.opacity(0.03))
-        .cornerRadius(12)
+        .background(Color.black.opacity(0.3))
+        .border(Color.white.opacity(0.1))
     }
 }
 
-@MainActor
 @available(iOS 16.0, *)
 struct WaveformView: View {
     let points: [Double]
@@ -284,24 +319,16 @@ struct WaveformView: View {
     
     var body: some View {
         GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            let mid = h / 2
-            let scale = h / 3.5
+            let w = geo.size.width, h = geo.size.height
+            let mid = h / 2, scale = h / 3.0
             
             ZStack {
-                // Background
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.03))
-                
-                // Zero line
                 Path { p in
                     p.move(to: CGPoint(x: 0, y: mid))
                     p.addLine(to: CGPoint(x: w, y: mid))
                 }
-                .stroke(Color.gray.opacity(0.3), style: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
+                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
                 
-                // Waveform
                 if points.count > 1 {
                     Path { path in
                         let step = w / Double(max(points.count - 1, 1))
@@ -310,14 +337,13 @@ struct WaveformView: View {
                             path.addLine(to: CGPoint(x: Double(i) * step, y: mid - val * scale))
                         }
                     }
-                    .stroke(settled ? Color.green : color, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                    .stroke(settled ? Color.green : color, style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
                 }
             }
         }
     }
 }
 
-@MainActor
 @available(iOS 16.0, *)
 struct OscillationResultView: View {
     let settled: Bool
@@ -327,37 +353,23 @@ struct OscillationResultView: View {
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
-        VStack(spacing: 14) {
-            Image(systemName: settled ? "checkmark.seal.fill" : "exclamationmark.octagon.fill")
-                .font(.system(size: 40))
-                .foregroundColor(settled ? .green : .orange)
-            Text(settled ? "SYSTEM STABILIZED! 🎉" : "STILL OSCILLATING")
+        VStack(spacing: 12) {
+            Text(settled ? "SYSTEM_STABLE" : "UNSTABLE_EQUILIBRIUM")
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
                 .foregroundColor(settled ? .green : .orange)
-            Text(String(format: "Damping ratio ζ = %.3f", dampingRatio))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.gray)
+            
             HStack(spacing: 16) {
                 Button(action: onRetry) {
-                    Label("RETRY", systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20).padding(.vertical, 10)
-                        .background(Color.gray).cornerRadius(10)
+                    Text("RE-TUNE").font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white).padding(10).background(Color.white.opacity(0.1)).cornerRadius(6)
                 }
                 Button(action: onNext) {
-                    Label("NEXT LEVEL", systemImage: "chevron.right.2")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20).padding(.vertical, 10)
-                        .background(neonCyan).cornerRadius(10)
+                    Text("CONTINUE").font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.black).padding(10).background(neonCyan).cornerRadius(6)
                 }
             }
         }
-        .padding(16)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.15), lineWidth: 0.5))
+        .padding(16).background(Color.black.opacity(0.8)).overlay(RoundedRectangle(cornerRadius: 12).stroke(neonCyan.opacity(0.3), lineWidth: 1))
     }
 }
 #endif

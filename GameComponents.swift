@@ -130,6 +130,7 @@ struct FormulaCard: View {
 struct GridBackground: View {
     let color: Color
     let size: CGSize
+    @State private var scanPos: CGFloat = 0
     
     var body: some View {
         ZStack {
@@ -150,6 +151,17 @@ struct GridBackground: View {
                     p.addLine(to: CGPoint(x: size.width, y: Double(i) * 30))
                 }
                 .stroke(color.opacity(0.07), lineWidth: 0.5)
+            }
+            
+            // Neon scan line
+            Rectangle()
+                .fill(LinearGradient(colors: [.clear, color.opacity(0.15), .clear], startPoint: .top, endPoint: .bottom))
+                .frame(height: 100)
+                .offset(y: -50 + scanPos * (size.height + 100))
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
+                scanPos = 1.0
             }
         }
     }
@@ -179,48 +191,54 @@ struct ResultOverlay: View {
     }
     
     var body: some View {
-        VStack(spacing: 14) {
-            Text(grade)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
-                .foregroundColor(gradeColor)
-                .multilineTextAlignment(.center)
-            
-            // Accuracy meter
-            VStack(alignment: .leading, spacing: 4) {
-                Text(String(format: "ACCURACY: %.0f%%", accuracy * 100))
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(Color.white.opacity(0.1))
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(gradeColor)
-                            .frame(width: geo.size.width * accuracy)
-                    }
-                }
-                .frame(height: 8)
+        ZStack {
+            if accuracy > 0.8 {
+                ConfettiBurstView(color: neonCyan)
             }
-            .padding(.horizontal, 30)
             
-            HStack(spacing: 16) {
-                Button(action: onRetry) {
-                    Label("RETRY", systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 11)
-                        .background(Color.gray)
-                        .cornerRadius(10)
+            VStack(spacing: 14) {
+                Text(grade)
+                    .font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .foregroundColor(gradeColor)
+                    .multilineTextAlignment(.center)
+                
+                // Accuracy meter
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(format: "ACCURACY: %.0f%%", accuracy * 100))
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(Color.white.opacity(0.1))
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(gradeColor)
+                                .frame(width: geo.size.width * accuracy)
+                        }
+                    }
+                    .frame(height: 8)
                 }
-                Button(action: onNext) {
-                    Label("NEXT LEVEL", systemImage: "chevron.right.2")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 11)
-                        .background(neonCyan)
-                        .cornerRadius(10)
+                .padding(.horizontal, 30)
+                
+                HStack(spacing: 16) {
+                    Button(action: onRetry) {
+                        Label("RETRY", systemImage: "arrow.counterclockwise")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 11)
+                            .background(Color.gray)
+                            .cornerRadius(10)
+                    }
+                    Button(action: onNext) {
+                        Label("NEXT LEVEL", systemImage: "chevron.right.2")
+                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 11)
+                            .background(neonCyan)
+                            .cornerRadius(10)
+                    }
                 }
             }
         }
@@ -229,6 +247,105 @@ struct ResultOverlay: View {
         .cornerRadius(20)
         .shadow(color: neonCyan.opacity(0.2), radius: 20)
         .padding(.horizontal, 30)
+    }
+}
+@available(iOS 16.0, *)
+struct ScientificSlider: View {
+    let label: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let unit: String
+    let color: Color
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label)
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(.gray)
+                Spacer()
+                Text(String(format: "%.1f %@", value, unit))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(color)
+            }
+            Slider(value: $value, in: range)
+                .tint(color)
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+struct HUDDataRow: View {
+    let label: String
+    let value: String
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 8, design: .monospaced))
+                .foregroundColor(.gray)
+            Spacer()
+            Text(value)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(neonCyan)
+        }
+        .frame(width: 100)
+    }
+}
+@available(iOS 16.0, *)
+struct ConfettiBurstView: View {
+    let color: Color
+    @State private var particles: [Particle] = []
+    
+    struct Particle: Identifiable {
+        let id = UUID()
+        var x: CGFloat
+        var y: CGFloat
+        var size: CGFloat
+        var opacity: Double
+        var speedY: CGFloat
+        var speedX: CGFloat
+    }
+    
+    var body: some View {
+        ZStack {
+            ForEach(particles) { p in
+                Rectangle()
+                    .fill(color)
+                    .frame(width: p.size, height: p.size)
+                    .position(x: p.x, y: p.y)
+                    .opacity(p.opacity)
+            }
+        }
+        .onAppear {
+            spawnParticles()
+        }
+    }
+    
+    private func spawnParticles() {
+        for _ in 0..<50 {
+            particles.append(Particle(
+                x: UIScreen.main.bounds.width / 2,
+                y: UIScreen.main.bounds.height / 2,
+                size: CGFloat.random(in: 4...10),
+                opacity: 1.0,
+                speedY: CGFloat.random(in: -15...15),
+                speedX: CGFloat.random(in: -15...15)
+            ))
+        }
+        
+        Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { timer in
+            for i in particles.indices {
+                particles[i].x += particles[i].speedX
+                particles[i].y += particles[i].speedY
+                particles[i].speedY += 0.5 // gravity
+                particles[i].opacity -= 0.015
+            }
+            if particles.allSatisfy({ $0.opacity <= 0 }) {
+                timer.invalidate()
+            }
+        }
     }
 }
 #endif

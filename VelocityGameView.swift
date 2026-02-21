@@ -57,120 +57,156 @@ struct VelocityGameView: View {
                 
                 ScrollView {
                     VStack(spacing: 20) {
-                        // Target display
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("TARGET VELOCITY")
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.gray)
-                                Text(String(format: "%.1f m/s", targetVelocity))
-                                    .font(.system(size: 28, weight: .heavy, design: .monospaced))
-                                    .foregroundColor(neonCyan)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text("CURRENT")
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.gray)
-                                Text(String(format: "%.2f m/s", currentVelocity))
-                                    .font(.system(size: 28, weight: .heavy, design: .monospaced))
-                                    .foregroundColor(isRunning ? neonGreen : .white)
-                            }
-                        }
-                        .padding(16)
-                        .background(Color.white.opacity(0.04))
-                        .cornerRadius(14)
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.15), lineWidth: 0.5))
-                        
-                        // Simulation track
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.white.opacity(0.04))
-                                .frame(height: 60)
-                            
-                            // Target zone
-                            let targetFrac = min(1.0, targetVelocity / 12.0)
+                        // Advanced Scientific HUD Area
+                        ZStack {
+                            // Grid background
                             GeometryReader { geo in
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(neonGreen.opacity(0.25))
-                                    .frame(width: geo.size.width * 0.08, height: 60)
-                                    .offset(x: geo.size.width * targetFrac * 0.85)
-                                Text("TARGET")
-                                    .font(.system(size: 7, weight: .bold, design: .monospaced))
-                                    .foregroundColor(neonGreen)
-                                    .offset(x: geo.size.width * targetFrac * 0.85, y: -10)
+                                GridBackground(color: neonCyan, size: geo.size)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 16) {
+                                // Prediction Panel
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        Label("SIMULATION_PARAMS", systemImage: "terminal")
+                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                            .foregroundColor(neonCyan)
+                                        
+                                        Text(String(format: "TARGET_V: %.2f m/s", targetVelocity))
+                                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                                            .foregroundColor(neonCyan)
+                                        
+                                        Text("ENVIRONMENT: VACUUM_DEFAULT")
+                                            .font(.system(size: 7, design: .monospaced))
+                                            .foregroundColor(.gray)
+                                    }
+                                    .padding(12)
+                                    .background(Color.black.opacity(0.6))
+                                    .border(neonCyan.opacity(0.3), width: 1)
+                                    
+                                    Spacer()
+                                    
+                                    // Real-time calculation readout
+                                    VStack(alignment: .trailing, spacing: 4) {
+                                        Text("COMPUTED_ACCEL")
+                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                            .foregroundColor(.gray)
+                                        Text(String(format: "%.3f m/s²", max(0, (force - friction) / mass)))
+                                            .font(.system(size: 18, weight: .bold, design: .monospaced))
+                                            .foregroundColor(neonGreen)
+                                        Text("F_NET = F - f")
+                                            .font(.system(size: 7, design: .monospaced))
+                                            .foregroundColor(.gray)
+                                    }
+                                }
+                                .padding(.horizontal)
                                 
-                                // Object
-                                ZStack {
-                                    RoundedRectangle(cornerRadius: 6)
-                                        .fill(isRunning ? neonCyan : Color.gray)
-                                        .frame(width: 36, height: 40)
-                                    Image(systemName: "cube.fill")
-                                        .foregroundColor(.black)
-                                        .font(.system(size: 16))
+                                // Simulation Track (Scientist Style)
+                                ZStack(alignment: .leading) {
+                                    // Track markers
+                                    HStack(spacing: 0) {
+                                        ForEach(0..<13) { i in
+                                            VStack {
+                                                Rectangle().fill(neonCyan.opacity(0.2)).frame(width: 1, height: 10)
+                                                Text("\(i)m").font(.system(size: 6, design: .monospaced)).foregroundColor(.gray)
+                                            }
+                                            if i < 12 { Spacer() }
+                                        }
+                                    }
+                                    .padding(.horizontal, 18)
+                                    
+                                    // Target zone highlighting
+                                    let targetFrac = min(1.0, targetVelocity / 15.0)
+                                    GeometryReader { geo in
+                                        let targetX = geo.size.width * targetFrac * 0.85
+                                        
+                                        // Glowing target line
+                                        Rectangle()
+                                            .fill(neonGreen.opacity(0.4))
+                                            .frame(width: 4, height: 40)
+                                            .blur(radius: 2)
+                                            .position(x: targetX, y: 20)
+                                        
+                                        // Object with Vectors
+                                        VStack(spacing: 0) {
+                                            // Force Vector Arrow
+                                            if !isRunning {
+                                                HStack(spacing: 0) {
+                                                    Spacer().frame(width: 20)
+                                                    Image(systemName: "arrow.right")
+                                                        .font(.system(size: 12, weight: .bold))
+                                                        .foregroundColor(neonCyan)
+                                                        .scaleEffect(x: CGFloat(force / 10.0), y: 1.0, anchor: .leading)
+                                                    Text("F")
+                                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                                        .foregroundColor(neonCyan)
+                                                }
+                                                .frame(width: 40, alignment: .leading)
+                                            }
+                                            
+                                            ZStack {
+                                                RoundedRectangle(cornerRadius: 4)
+                                                    .fill(isRunning ? neonCyan : Color.gray)
+                                                    .frame(width: 30, height: 30)
+                                                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.white.opacity(0.5), lineWidth: 0.5))
+                                                
+                                                Text("\(Int(mass))kg")
+                                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                                    .foregroundColor(.black)
+                                            }
+                                            
+                                            // Velocity Label during run
+                                            if isRunning {
+                                                Text("\(String(format: "%.1f", currentVelocity))")
+                                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                                    .foregroundColor(neonCyan)
+                                                    .padding(.top, 2)
+                                            }
+                                        }
+                                        .position(x: geo.size.width * objectX * 0.9 + 15, y: 20)
+                                    }
                                 }
-                                .offset(x: geo.size.width * objectX * 0.9 - 18, y: 10)
-                            }
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(neonCyan.opacity(0.2), lineWidth: 0.5))
-                        .padding(.vertical, 4)
-                        
-                        // Sliders
-                        VStack(spacing: 16) {
-                            PhysicsSlider(label: "FORCE (F)", value: $force, range: 1...30, unit: "N", color: neonCyan)
-                            PhysicsSlider(label: "MASS (m)", value: $mass, range: 1...20, unit: "kg", color: Color(red: 0.8, green: 0.5, blue: 1.0))
-                            PhysicsSlider(label: "FRICTION (f)", value: $friction, range: 0...15, unit: "N", color: neonRed)
-                        }
-                        .padding(16)
-                        .background(Color.white.opacity(0.03))
-                        .cornerRadius(14)
-                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.1), lineWidth: 0.5))
-                        
-                        // Calculated acceleration display
-                        let accel = max(0, (force - friction) / mass)
-                        HStack {
-                            VStack(alignment: .leading) {
-                                Text("CALCULATED ACCELERATION")
-                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.gray)
-                                Text(String(format: "a = (%.0fN − %.0fN) / %.0fkg = %.2f m/s²", force, friction, mass, accel))
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundColor(neonCyan)
-                            }
-                            Spacer()
-                        }
-                        .padding(12)
-                        .background(Color.white.opacity(0.03))
-                        .cornerRadius(12)
-                        
-                        // Launch button
-                        if !showResult {
-                            Button(action: launchSimulation) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: isRunning ? "stop.circle.fill" : "play.circle.fill")
-                                        .font(.system(size: 22))
-                                    Text(isRunning ? "RUNNING..." : "LAUNCH SIMULATION")
-                                        .font(.system(size: 15, weight: .bold, design: .monospaced))
+                                .frame(height: 70)
+                                
+                                // Parameter Control blackboard
+                                VStack(spacing: 20) {
+                                    ScientificSlider(label: "INPUT_FORCE", value: $force, range: 1...40, unit: "N", color: neonCyan)
+                                    ScientificSlider(label: "OBJECT_MASS", value: $mass, range: 1...25, unit: "kg", color: .purple)
+                                    ScientificSlider(label: "FRICTION_COEFF", value: $friction, range: 0...15, unit: "N", color: .red)
                                 }
-                                .foregroundColor(.black)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(isRunning ? Color.gray : neonCyan)
-                                .cornerRadius(14)
-                                .shadow(color: isRunning ? .clear : neonCyan.opacity(0.4), radius: 12)
+                                .padding(20)
+                                .background(Color.white.opacity(0.04))
+                                .cornerRadius(20)
+                                .overlay(RoundedRectangle(cornerRadius: 20).stroke(neonCyan.opacity(0.1), lineWidth: 1))
+                                .padding(.horizontal)
+                                
+                                // Action Button
+                                if !showResult {
+                                    Button(action: launchSimulation) {
+                                        Text(isRunning ? "PROCESSING_SIMULATION..." : "EXECUTE_KINETIC_LINK")
+                                            .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                                            .foregroundColor(.black)
+                                            .padding(.vertical, 18)
+                                            .frame(maxWidth: .infinity)
+                                            .background(isRunning ? Color.gray : neonCyan)
+                                            .cornerRadius(12)
+                                            .shadow(color: neonCyan.opacity(0.4), radius: 10)
+                                    }
+                                    .padding(.horizontal)
+                                    .disabled(isRunning)
+                                }
+                                
+                                // Result Card
+                                if showResult {
+                                    VelocityResultView(hit: hitTarget, current: currentVelocity, target: targetVelocity, onNext: nextLevel, onRetry: retryLevel)
+                                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                                        .padding(.horizontal)
+                                }
+                                
+                                Spacer().frame(height: 20)
                             }
-                            .disabled(isRunning)
                         }
-                        
-                        // Result
-                        if showResult {
-                            VelocityResultView(hit: hitTarget, current: currentVelocity, target: targetVelocity, onNext: nextLevel, onRetry: retryLevel)
-                        }
-                        
-                        Spacer().frame(height: 20)
                     }
-                    .padding(16)
                 }
             }
         }
@@ -187,21 +223,22 @@ struct VelocityGameView: View {
         let maxTime = 3.0
         timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: dt, repeats: true) { t in
-            elapsed += dt
-            let newVelocity = accel * elapsed
-            let newX = min(0.9, 0.5 * accel * elapsed * elapsed / 12.0)
-            let shouldStop = elapsed >= maxTime || newX >= 0.9
-            if shouldStop { t.invalidate() }
-            DispatchQueue.main.async {
-                currentVelocity = newVelocity
-                objectX = newX
+            Task { @MainActor in
+                elapsed += dt
+                let newVelocity = accel * elapsed
+                let newX = min(0.9, 0.5 * accel * elapsed * elapsed / 12.0)
+                let shouldStop = elapsed >= maxTime || newX >= 0.9
+                if shouldStop { t.invalidate() }
+                
+                self.currentVelocity = newVelocity
+                self.objectX = newX
                 if shouldStop {
-                    isRunning = false
-                    let diff = abs(newVelocity - targetVelocity)
-                    hitTarget = diff <= tolerance
-                    if hitTarget { totalScore += 100 * level; streak += 1 } else { streak = 0 }
-                    score = totalScore
-                    showResult = true
+                    self.isRunning = false
+                    let diff = abs(newVelocity - self.targetVelocity)
+                    self.hitTarget = diff <= self.tolerance
+                    if self.hitTarget { self.totalScore += 100 * self.level; self.streak += 1 } else { self.streak = 0 }
+                    self.score = self.totalScore
+                    self.showResult = true
                 }
             }
         }
@@ -213,33 +250,6 @@ struct VelocityGameView: View {
 
 // MARK: - Supporting Views
 
-@MainActor
-@available(iOS 16.0, *)
-struct PhysicsSlider: View {
-    let label: String
-    @Binding var value: Double
-    let range: ClosedRange<Double>
-    let unit: String
-    let color: Color
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(label)
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(.gray)
-                Spacer()
-                Text(String(format: "%.1f %@", value, unit))
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundColor(color)
-            }
-            Slider(value: $value, in: range)
-                .tint(color)
-        }
-    }
-}
-
-@MainActor
 @available(iOS 16.0, *)
 struct VelocityResultView: View {
     let hit: Bool
@@ -254,35 +264,39 @@ struct VelocityResultView: View {
             Image(systemName: hit ? "checkmark.seal.fill" : "xmark.octagon.fill")
                 .font(.system(size: 40))
                 .foregroundColor(hit ? .green : .red)
-            Text(hit ? "TARGET HIT! +\(100)pts" : "WIDE BY \(String(format: "%.2f", abs(current - target))) m/s")
+            Text(hit ? "TARGET_ACHIEVED" : "COMPUTATION_MISMATCH")
                 .font(.system(size: 15, weight: .bold, design: .monospaced))
                 .foregroundColor(hit ? .green : .red)
             
+            Text(hit ? "+\(100) UNITS RECORDED" : "DELTA: \(String(format: "%.2f", abs(current - target))) m/s")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.gray)
+            
             HStack(spacing: 16) {
                 Button(action: onRetry) {
-                    Label("RETRY", systemImage: "arrow.counterclockwise")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(.black)
-                        .padding(.horizontal, 20)
+                    Label("RECALIBRATE", systemImage: "arrow.counterclockwise")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(Color.gray)
-                        .cornerRadius(10)
+                        .background(Color.white.opacity(0.1))
+                        .cornerRadius(8)
                 }
                 Button(action: onNext) {
-                    Label("NEXT LEVEL", systemImage: "chevron.right.2")
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    Label("NEXT_EXP", systemImage: "chevron.right.2")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(.black)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(neonCyan)
-                        .cornerRadius(10)
+                        .cornerRadius(8)
                 }
             }
         }
-        .padding(16)
-        .background(Color.white.opacity(0.04))
-        .cornerRadius(14)
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(neonCyan.opacity(0.15), lineWidth: 0.5))
+        .padding(20)
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(neonCyan.opacity(0.3), lineWidth: 1))
     }
 }
 #endif
