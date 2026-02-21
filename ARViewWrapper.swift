@@ -3,6 +3,7 @@ import SwiftUI
 import ARKit
 import SceneKit
 import UIKit
+import AVFoundation
 
 /// Bridges SwiftUI with the custom KineprintARView.
 /// Handles tap-to-track: user taps a surface to place a tracking anchor.
@@ -118,7 +119,66 @@ final class KineprintARViewWrapper: UIView {
 }
 
 @available(iOS 16.0, *)
-struct ARCameraView: UIViewRepresentable {
+struct ARCameraView: View {
+    @ObservedObject var viewModel: KineprintViewModel
+    
+    var body: some View {
+                    Text("CAMERA ACCESS REQUIRED")
+                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                    Text("Kineprint needs camera access to perform deep analysis of your physical environment.")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    
+                    Button("Grant Access in Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(url)
+                        }
+                    }
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .foregroundColor(.black)
+                    .padding()
+                    .background(Color(red: 0, green: 1, blue: 0.85))
+                    .cornerRadius(8)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(red: 0.0, green: 0.05, blue: 0.1)) // Deep dark blue
+            } else {
+                Color.black.ignoresSafeArea()
+            }
+        }
+        .onAppear {
+            checkPermissions()
+        }
+    }
+    
+    private func checkPermissions() {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        switch status {
+        case .authorized:
+            cameraAuthorized = true
+            hasRequested = true
+        case .notDetermined:
+            AVCaptureDevice.requestAccess(for: .video) { granted in
+                DispatchQueue.main.async {
+                    self.cameraAuthorized = granted
+                    self.hasRequested = true
+                }
+            }
+        case .denied, .restricted:
+            cameraAuthorized = false
+            hasRequested = true
+        @unknown default:
+            cameraAuthorized = false
+            hasRequested = true
+        }
+    }
+}
+
+@available(iOS 16.0, *)
+struct ARCameraViewController: UIViewRepresentable {
     @ObservedObject var viewModel: KineprintViewModel
     
     func makeUIView(context: Context) -> KineprintARViewWrapper {

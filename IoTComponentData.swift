@@ -9,6 +9,7 @@ struct IoTComponent: Identifiable, Hashable {
     let description: String
     let useCase: String
     let iconName: String
+    let componentImageName: String
     // Rich detail fields
     let specs: [String: String]
     let pinout: [PinInfo]
@@ -47,6 +48,7 @@ struct IoTComponentsDatabase {
             description: "A powerful, low-cost microchip with built-in Wi-Fi and dual-mode Bluetooth. It features a dual-core Xtensa LX6 processor running up to 240 MHz.",
             useCase: "Perfect for IoT edge devices, connected smart home hubs, and wireless sensor nodes. Used when wireless connectivity is mandatory.",
             iconName: "cpu",
+            componentImageName: "esp32_component",
             specs: [
                 "CPU": "Dual-core Xtensa LX6 @ 240 MHz",
                 "RAM": "520 KB SRAM",
@@ -79,6 +81,7 @@ struct IoTComponentsDatabase {
             description: "An open-source microcontroller board based on the ATmega328P. It has 14 digital I/O pins, 6 analog inputs, a 16 MHz crystal oscillator, USB connection, and a reset button.",
             useCase: "Great for beginners, prototyping physical computing projects, and controlling basic sensors/motors. The most popular entry point into embedded systems.",
             iconName: "memorychip",
+            componentImageName: "arduino_uno_component",
             specs: [
                 "CPU": "ATmega328P @ 16 MHz",
                 "Flash": "32 KB",
@@ -110,6 +113,7 @@ struct IoTComponentsDatabase {
             description: "A small, affordable single-board computer with a powerful ARM Cortex-A72 CPU, USB 3.0, and Gigabit Ethernet. Runs full Linux OS.",
             useCase: "Used for running full operating systems, computer vision (like OpenCV), complex AI processing, and heavy web servers. The powerhouse of hobbyist SBCs.",
             iconName: "macmini.fill",
+            componentImageName: "raspberry_pi_component",
             specs: [
                 "CPU": "Quad-core ARM Cortex-A72 @ 1.8 GHz",
                 "RAM": "2/4/8 GB LPDDR4X",
@@ -141,6 +145,7 @@ struct IoTComponentsDatabase {
             description: "An ultrasonic distance sensor that measures distance by sending 40 kHz sound waves and timing the echo. Measurement range: 2 cm to 400 cm.",
             useCase: "Used for obstacle avoidance in robots, measuring tank water levels, and presence detection in smart parking systems.",
             iconName: "wave.3.right",
+            componentImageName: "ultrasonic_hcsr04",
             specs: [
                 "Operating Voltage": "5V DC",
                 "Current Consumption": "15 mA",
@@ -166,6 +171,7 @@ struct IoTComponentsDatabase {
             description: "A basic, low-cost digital temperature and humidity sensor using a capacitive humidity sensor and a thermistor. Outputs a calibrated digital signal.",
             useCase: "Used in smart weather stations, greenhouse monitoring, and indoor climate control systems.",
             iconName: "thermometer.sun",
+            componentImageName: "dht11_sensor",
             specs: [
                 "Operating Voltage": "3.3V – 5V",
                 "Temperature Range": "0°C – 50°C (±2°C)",
@@ -189,6 +195,7 @@ struct IoTComponentsDatabase {
             description: "A 6-axis MotionTracking device combining a 3-axis gyroscope and a 3-axis accelerometer on one chip. Uses I2C interface and includes onboard Digital Motion Processor (DMP).",
             useCase: "Crucial for drone stabilization, robotic balancing, device orientation tracking, and kinetic interaction analysis — the core sensor behind Kineprint.",
             iconName: "gyroscope",
+            componentImageName: "mpu6050_sensor",
             specs: [
                 "Operating Voltage": "3.3V – 5V (onboard regulator)",
                 "Gyroscope Range": "±250/±500/±1000/±2000 °/s",
@@ -216,6 +223,7 @@ struct IoTComponentsDatabase {
             description: "A light-dependent resistor whose resistance decreases when light intensity increases. Resistance ranges from ~1MΩ (dark) to ~1kΩ (bright light).",
             useCase: "Automated streetlights, solar tracking systems, and detecting day/night cycles in weather stations.",
             iconName: "sun.max.fill",
+            componentImageName: "ldr_sensor",
             specs: [
                 "Resistance (Dark)": "~1 MΩ",
                 "Resistance (10 Lux)": "~8–20 kΩ",
@@ -238,6 +246,7 @@ struct IoTComponentsDatabase {
             description: "A Passive Infrared sensor that measures infrared light radiating from objects in its field of view. Detects motion by sensing changes in IR levels.",
             useCase: "Security alarms, automatic lighting systems, and human presence detection in smart buildings.",
             iconName: "person.wave.2.fill",
+            componentImageName: "pir_sensor",
             specs: [
                 "Operating Voltage": "5V – 12V",
                 "Detection Range": "up to 7 meters",
@@ -263,6 +272,7 @@ struct IoTComponentsDatabase {
             description: "A small, high-precision rotary actuator controlled via PWM signal. Rotates 0°–180°. Includes metal gears in the MG90S variant for extra torque.",
             useCase: "Controlling robot arms, steering mechanisms in RC cars, opening/closing smart locks, and camera pan-tilt mounts.",
             iconName: "arrow.triangle.2.circlepath",
+            componentImageName: "sg90_servo",
             specs: [
                 "Operating Voltage": "4.8V – 6V",
                 "Stall Torque": "1.8 kg·cm at 4.8V",
@@ -287,6 +297,7 @@ struct IoTComponentsDatabase {
             description: "An electric machine that converts DC electrical energy into rotational mechanical energy. Speed controlled by voltage/PWM; direction by polarity reversal.",
             useCase: "Driving wheels of robot rovers, cooling fans, conveyor belts, and propellers.",
             iconName: "fan.fill",
+            componentImageName: "dc_motor",
             specs: [
                 "Operating Voltage": "3V – 12V (typical hobby motors)",
                 "No-load Current": "~70 mA at 6V",
@@ -308,6 +319,7 @@ struct IoTComponentsDatabase {
             description: "An electrically operated switch that allows a small microcontroller signal to safely control high-power circuits — AC or DC regardless of voltage.",
             useCase: "Switching AC appliances (lamps, water pumps, heaters). Ideal wherever you need MCU-level logic to control mains voltage.",
             iconName: "switch.2",
+            componentImageName: "relay_module",
             specs: [
                 "Coil Voltage": "5V DC",
                 "Coil Current": "~70–80 mA",
@@ -334,6 +346,7 @@ struct IoTComponentsDatabase {
             description: "A brushless DC motor that divides a full rotation into discrete equal steps (typically 200 steps = 1.8° each). Extremely precise position control without feedback sensors.",
             useCase: "3D printers (Kinetic Printing!), CNC machines, precise robotic positioning, and automated camera sliders.",
             iconName: "gearshape.2.fill",
+            componentImageName: "stepper_motor",
             specs: [
                 "Step Angle": "1.8° per step (200 steps/revolution)",
                 "Voltage": "5V (28BYJ-48) or 12V (NEMA17)",

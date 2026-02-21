@@ -21,6 +21,9 @@ struct ProfileSettingsView: View {
     @State private var exportText = ""
     @State private var toastMessage = ""
     @State private var showToast = false
+    @State private var showOnboardingResetAlert = false
+    @AppStorage("isOnboardingComplete") private var isOnboardingComplete: Bool = false
+    @AppStorage("userName") private var appUserName: String = ""
 
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
 
@@ -190,6 +193,27 @@ struct ProfileSettingsView: View {
                             }
                         }
 
+                        // ─── APP TOUR ───
+                        SettingsSection(title: "APP TOUR") {
+                            VStack(spacing: 10) {
+                                ActionRow(
+                                    icon: "arrow.counterclockwise.circle.fill",
+                                    label: "REPLAY ONBOARDING",
+                                    color: neonCyan,
+                                    action: { showOnboardingResetAlert = true }
+                                )
+                                
+                                HStack(spacing: 8) {
+                                    Image(systemName: "info.circle")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.gray)
+                                    Text("Revisit the app introduction and learn about Kineprint features")
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                        }
+
                         Spacer().frame(height: 30)
                     }
                     .padding(.horizontal, 16)
@@ -223,6 +247,14 @@ struct ProfileSettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This will reset all sensor calibration data to factory defaults. Continue?")
+        }
+        .alert("Replay Onboarding", isPresented: $showOnboardingResetAlert) {
+            Button("REPLAY", role: .destructive) {
+                isOnboardingComplete = false
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will take you back to the onboarding screens to learn about the app features.")
         }
         .sheet(isPresented: $showExportSheet) {
             ActivityViewController(activityItems: exportItems)

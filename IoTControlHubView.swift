@@ -8,6 +8,7 @@ struct IoTControlHubView: View {
     @State private var showingConnectionSheet = false
     @State private var selectedDevice: IoTDevice?
     @State private var activeTab: IoTTab = .devices
+    @State private var showSettings = false
     
     enum IoTTab: String {
         case devices = "DEVICES"
@@ -51,7 +52,7 @@ struct IoTControlHubView: View {
                         
                         Spacer()
                         
-                        Button(action: {}) {
+                        Button(action: { showSettings = true }) {
                             Image(systemName: "gearshape")
                                 .foregroundColor(neonCyan)
                                 .font(.system(size: 20, weight: .bold))
@@ -88,6 +89,211 @@ struct IoTControlHubView: View {
                 .padding(.top, 10)
             }
         .preferredColorScheme(.dark)
+        .sheet(isPresented: $showSettings) {
+            IoTSettingsSheet(bluetoothManager: bluetoothManager)
+        }
+    }
+}
+
+// MARK: - IoT Settings Sheet
+
+@available(iOS 16.0, *)
+struct IoTSettingsSheet: View {
+    @ObservedObject var bluetoothManager: BluetoothManager
+    @Environment(\.dismiss) var dismiss
+    @State private var autoScanEnabled = true
+    @State private var showSignalStrength = true
+    @State private var showDeviceLabels = true
+    @State private var scanTimeout: Double = 30
+    @State private var showClearAlert = false
+    
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            // Background grid
+            GeometryReader { geo in
+                ForEach(0..<12) { i in
+                    Path { path in
+                        path.move(to: CGPoint(x: 0, y: geo.size.height / 12 * CGFloat(i)))
+                        path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 12 * CGFloat(i)))
+                    }
+                    .stroke(neonCyan.opacity(0.07), lineWidth: 0.5)
+                }
+            }
+            .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(neonCyan)
+                    }
+                    Spacer()
+                    Text("IOT SETTINGS")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                    Spacer()
+                    Color.clear.frame(width: 24) // balance
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
+                
+                Rectangle()
+                    .fill(neonCyan.opacity(0.3))
+                    .frame(height: 1)
+                
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 18) {
+                        // ─── SCANNING ───
+                        SettingsSection(title: "SCANNING") {
+                            VStack(spacing: 12) {
+                                Toggle(isOn: $autoScanEnabled) {
+                                    HStack {
+                                        Text("Auto-Scan on Launch")
+                                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Text(autoScanEnabled ? "ON" : "OFF")
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(autoScanEnabled ? neonCyan : .gray)
+                                    }
+                                }
+                                .toggleStyle(SwitchToggleStyle(tint: neonCyan))
+                                
+                                Divider().background(neonCyan.opacity(0.1))
+                                
+                                VStack(spacing: 6) {
+                                    HStack {
+                                        Text("Scan Timeout")
+                                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Text("\(Int(scanTimeout))s")
+                                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                            .foregroundColor(neonCyan)
+                                    }
+                                    Slider(value: $scanTimeout, in: 10...120, step: 5)
+                                        .accentColor(neonCyan)
+                                }
+                            }
+                        }
+                        
+                        // ─── DISPLAY ───
+                        SettingsSection(title: "DISPLAY") {
+                            VStack(spacing: 12) {
+                                Toggle(isOn: $showSignalStrength) {
+                                    HStack {
+                                        Text("Signal Strength Bars")
+                                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Text(showSignalStrength ? "ON" : "OFF")
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(showSignalStrength ? neonCyan : .gray)
+                                    }
+                                }
+                                .toggleStyle(SwitchToggleStyle(tint: neonCyan))
+                                
+                                Divider().background(neonCyan.opacity(0.1))
+                                
+                                Toggle(isOn: $showDeviceLabels) {
+                                    HStack {
+                                        Text("Device Type Labels")
+                                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Text(showDeviceLabels ? "ON" : "OFF")
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(showDeviceLabels ? neonCyan : .gray)
+                                    }
+                                }
+                                .toggleStyle(SwitchToggleStyle(tint: neonCyan))
+                            }
+                        }
+                        
+                        // ─── ACTIONS ───
+                        SettingsSection(title: "ACTIONS") {
+                            VStack(spacing: 10) {
+                                ActionRow(
+                                    icon: "arrow.clockwise",
+                                    label: "RESCAN DEVICES",
+                                    color: neonCyan,
+                                    action: {
+                                        bluetoothManager.startScan()
+                                        dismiss()
+                                    }
+                                )
+                                
+                                Divider().background(neonCyan.opacity(0.1))
+                                
+                                ActionRow(
+                                    icon: "trash",
+                                    label: "CLEAR DISCOVERED DEVICES",
+                                    color: .orange,
+                                    action: { showClearAlert = true }
+                                )
+                            }
+                        }
+                        
+                        // ─── INFO ───
+                        SettingsSection(title: "ABOUT") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack {
+                                    Text("Bluetooth")
+                                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.gray)
+                                    Spacer()
+                                    HStack(spacing: 6) {
+                                        Circle()
+                                            .fill(Color.green)
+                                            .frame(width: 8, height: 8)
+                                        Text("ACTIVE")
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(.green)
+                                    }
+                                }
+                                HStack {
+                                    Text("Devices Found")
+                                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.gray)
+                                    Spacer()
+                                    Text("\(bluetoothManager.discoveredDevices.count)")
+                                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                        .foregroundColor(neonCyan)
+                                }
+                                HStack {
+                                    Text("IoT Hub Version")
+                                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                        .foregroundColor(.gray)
+                                    Spacer()
+                                    Text("v2.0")
+                                        .font(.system(size: 13, weight: .bold, design: .monospaced))
+                                        .foregroundColor(neonCyan)
+                                }
+                            }
+                        }
+                        
+                        Spacer().frame(height: 30)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .alert("Clear Devices", isPresented: $showClearAlert) {
+            Button("CLEAR", role: .destructive) {
+                bluetoothManager.discoveredDevices.removeAll()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will clear all discovered devices from the list. You can rescan to find them again.")
+        }
     }
 }
 
@@ -686,10 +892,26 @@ struct ComponentCardView: View {
                         Circle()
                             .stroke(neonCyan.opacity(0.3), lineWidth: 1)
                             .frame(width: 52, height: 52)
-                        Image(systemName: component.iconName)
-                            .foregroundColor(neonCyan)
-                            .font(.system(size: 22))
-                            .shadow(color: neonCyan.opacity(0.4), radius: 6)
+                        
+                        if let path = Bundle.main.path(forResource: component.componentImageName, ofType: "png"),
+                           let uiImage = UIImage(contentsOfFile: path) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 36, height: 36)
+                                .clipShape(Circle())
+                        } else if let uiImage = UIImage(named: component.componentImageName) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 36, height: 36)
+                                .clipShape(Circle())
+                        } else {
+                            Image(systemName: component.iconName)
+                                .foregroundColor(neonCyan)
+                                .font(.system(size: 22))
+                                .shadow(color: neonCyan.opacity(0.4), radius: 6)
+                        }
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -760,7 +982,7 @@ struct ComponentDetailView: View {
             
             ScrollView {
                 VStack(spacing: 0) {
-                    // Hero section with large icon
+                    // Hero section with component image
                     ZStack {
                         // Glow circles
                         Circle()
@@ -776,10 +998,27 @@ struct ComponentDetailView: View {
                             .fill(neonCyan.opacity(0.08))
                             .frame(width: 100, height: 100)
                         
-                        Image(systemName: component.iconName)
-                            .font(.system(size: 52))
-                            .foregroundColor(neonCyan)
-                            .shadow(color: neonCyan.opacity(0.6), radius: 20)
+                        if let path = Bundle.main.path(forResource: component.componentImageName, ofType: "png"),
+                           let uiImage = UIImage(contentsOfFile: path) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 120, height: 120)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .shadow(color: neonCyan.opacity(0.5), radius: 15)
+                        } else if let uiImage = UIImage(named: component.componentImageName) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 120, height: 120)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                                .shadow(color: neonCyan.opacity(0.5), radius: 15)
+                        } else {
+                            Image(systemName: component.iconName)
+                                .font(.system(size: 52))
+                                .foregroundColor(neonCyan)
+                                .shadow(color: neonCyan.opacity(0.6), radius: 20)
+                        }
                     }
                     .frame(height: 220)
                     .frame(maxWidth: .infinity)

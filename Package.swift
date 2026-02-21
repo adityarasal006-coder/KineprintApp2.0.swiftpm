@@ -17,6 +17,7 @@ let package = Package(
             name: "KineprintApp",
             targets: ["AppModule"],
             bundleIdentifier: "com-adi-kineprintApp.KineprintApp",
+            teamIdentifier: "PL2H83MN92",
             displayVersion: "1.0",
             bundleVersion: "1",
             appIcon: .placeholder(icon: .twoPeople),
@@ -39,5 +40,5 @@ let package = Package(
             path: "."
         )
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageVersions: [.v5]
 )

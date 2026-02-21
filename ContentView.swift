@@ -187,6 +187,7 @@ struct ARScannerTab: View {
                 
                 Spacer()
                 
+                // Sidebar controls
                 HStack(alignment: .bottom) {
                     Spacer()
                     SidebarControls(viewModel: viewModel)
@@ -194,13 +195,41 @@ struct ARScannerTab: View {
                         .padding(.bottom, 16)
                 }
                 
-                BottomDashboard(viewModel: viewModel)
-                    .padding(.horizontal, 12)
+                // Bottom section: capture button and dashboard
+                VStack(spacing: 16) {
+                    // Central capture button
+                    Button(action: {
+                        viewModel.captureBlueprintImage()
+                    }) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color(red: 0, green: 1, blue: 0.85), lineWidth: 4)
+                                .frame(width: 72, height: 72)
+                            Circle()
+                                .fill(Color(red: 0, green: 1, blue: 0.85).opacity(0.3))
+                                .frame(width: 60, height: 60)
+                            Image(systemName: "camera.viewfinder")
+                                .font(.system(size: 28, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
                     .padding(.bottom, 8)
+                    
+                    BottomDashboard(viewModel: viewModel)
+                        .padding(.horizontal, 12)
+                }
+                .padding(.bottom, 8)
             }
             
-            // Deep Scan HUD Overlay
-            if viewModel.isDeepScanning {
+            // Hacker Processing state
+            if viewModel.isHackerProcessing {
+                HackerProcessingAnimationView(viewModel: viewModel)
+                    .transition(.opacity)
+            } else if viewModel.showCapturedBlueprint, let entry = viewModel.lastScannedEntry {
+                BlueprintDisplayView(viewModel: viewModel, entry: entry)
+                    .transition(.opacity)
+            } else if viewModel.isDeepScanning {
+                // Legacy HUD
                 DeepScanHUD(viewModel: viewModel)
                     .transition(.opacity)
             }
@@ -1032,6 +1061,14 @@ struct ResearchEntry: Identifiable, Codable {
     let scanQuality: String
 }
 
+@available(iOS 16.0, *)
+struct ResearchPaper: Identifiable, Codable {
+    let id: UUID
+    let date: Date
+    let title: String
+    let content: String
+}
+
 // MARK: - ViewModel
 
 @available(iOS 16.0, *)
@@ -1047,6 +1084,11 @@ class KineprintViewModel: ObservableObject {
     @Published var deepScanProgress: CGFloat = 0
     @Published var lastScannedEntry: ResearchEntry?
     @Published var researchEntries: [ResearchEntry] = []
+    @Published var publishedPapers: [ResearchPaper] = []
+    
+    // New processing states
+    @Published var isHackerProcessing = false
+    @Published var showCapturedBlueprint = false
     
     // Personalization & State
     @AppStorage("userName") var userName: String = ""
@@ -1256,6 +1298,62 @@ class KineprintViewModel: ObservableObject {
             scanQuality: entry.scanQuality
         )
         researchEntries.append(cloned)
+    }
+    
+    // MARK: - Papers
+    
+    func publishPaper(title: String, content: String) {
+        let paper = ResearchPaper(id: UUID(), date: Date(), title: title, content: content)
+        publishedPapers.append(paper)
+    }
+    
+    // MARK: - Capture & Blueprint Flow
+    
+    func captureBlueprintImage() {
+        // Trigger haptic
+        #if os(iOS)
+        let generator = UIImpactFeedbackGenerator(style: .heavy)
+        generator.impactOccurred()
+        #endif
+        
+        isHackerProcessing = true
+        showCapturedBlueprint = false
+        
+        // Let processing animation run for ~4 seconds, then show blueprint
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4.0) {
+            self.generateBlueprintResult()
+            withAnimation(.easeOut(duration: 0.5)) {
+                self.isHackerProcessing = false
+                self.showCapturedBlueprint = true
+            }
+        }
+    }
+    
+    private func generateBlueprintResult() {
+        // Form a detailed research entry
+        let materials = ["Titanium-Carbon Blend", "Polylactic Acid (PLA)", "AISI 304 Stainless Steel", "High-Density Polyethylene"]
+        let names = ["ARCHETYPE-01", "KINETIC_CORE", "PROTOTYPE-X", "VESSEL_STRUCT"]
+        
+        let newEntry = ResearchEntry(
+            id: UUID(),
+            date: Date(),
+            title: names.randomElement() ?? "UNKNOWN_STRUCT",
+            dimensions: "\(Double.random(in: 12...80).formatted(.number.precision(.fractionLength(1))))W x \(Double.random(in: 5...40).formatted(.number.precision(.fractionLength(1))))H x \(Double.random(in: 10...30).formatted(.number.precision(.fractionLength(1))))D cm",
+            material: materials.randomElement() ?? "Synthetic Alloy",
+            blueprintData: "RAW_BLUEPRINT_VECTOR_\(UUID().uuidString.prefix(8))",
+            mass: "\(Double.random(in: 0.1...15.0).formatted(.number.precision(.fractionLength(2)))) kg",
+            scanQuality: "99.8% PRECISION"
+        )
+        
+        // Prepend to show at top
+        researchEntries.insert(newEntry, at: 0)
+        lastScannedEntry = newEntry
+        
+        NotificationManager.shared.scheduleScanCompleteNotification(itemName: newEntry.title)
+    }
+    
+    func dismissBlueprintView() {
+        showCapturedBlueprint = false
     }
 }
 #endif

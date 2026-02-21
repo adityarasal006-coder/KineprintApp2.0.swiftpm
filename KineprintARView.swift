@@ -54,8 +54,8 @@ class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
         arSCNView.isPlaying = true
         arSCNView.rendersContinuously = true
         
-        // Dark background for Blueprint aesthetic
-        arSCNView.scene.background.contents = UIColor.black
+        // Remove black background to allow camera feed to show
+        // arSCNView.scene.background.contents = UIColor.black
         
         addSubview(arSCNView)
         
@@ -66,11 +66,8 @@ class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
         let ambientLight = SCNNode()
         ambientLight.light = SCNLight()
         ambientLight.light!.type = .ambient
-        ambientLight.light!.color = UIColor(white: 0.3, alpha: 1.0)
-        scene.rootNode.addChildNode(ambientLight)
-        
-        // Apply bloom post-processing for neon glow
-        applyBloomTechnique()
+        // ambientLight.light!.color = UIColor(white: 0.3, alpha: 1.0) // Keep the scene well lit for camera
+        // scene.rootNode.addChildNode(ambientLight)
         
         // Initialize arSession AFTER arSCNView is set up
         arSession = arSCNView.session
@@ -79,29 +76,7 @@ class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
     
     // MARK: - Bloom/Glow Post-Processing
     
-    private func applyBloomTechnique() {
-        // SCNTechnique-based bloom for neon glow effect
-        // This makes any emissive material appear to glow
-        let techniqueDict: [String: Any] = [
-            "passes": [
-                "bloom": [
-                    "draw": "DRAW_SCENE",
-                    "inputs": [:],
-                    "outputs": ["color": "COLOR"],
-                    "colorStates": [
-                        "clear": true,
-                        "clearColor": "0.0 0.0 0.0 0.0"
-                    ]
-                ]
-            ],
-            "sequence": ["bloom"],
-            "symbols": [:]
-        ]
-        
-        if let technique = SCNTechnique(dictionary: techniqueDict) {
-            arSCNView.technique = technique
-        }
-    }
+    // Removed SCNTechnique bloom to fix Metal rendering crash on some devices.
     
     // MARK: - AR Session Configuration
     
@@ -209,9 +184,11 @@ class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
             if showVectors {
                 updateVelocityArrow(for: trackedObject, parentNode: node)
                 updateAccelerationArrow(for: trackedObject, parentNode: node)
+                updateDimensionText(for: trackedObject, parentNode: node)
             } else {
                 node.childNode(withName: "vel_arrow", recursively: false)?.removeFromParentNode()
                 node.childNode(withName: "accel_arrow", recursively: false)?.removeFromParentNode()
+                node.childNode(withName: "dim_text", recursively: false)?.removeFromParentNode()
             }
         }
         
@@ -309,6 +286,41 @@ class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
             name: "accel_arrow"
         )
         parentNode.addChildNode(arrow)
+    }
+    
+    private func updateDimensionText(for object: TrackedObject, parentNode: SCNNode) {
+        parentNode.childNode(withName: "dim_text", recursively: false)?.removeFromParentNode()
+        
+        let nodePos = parentNode.position
+        
+        // Simulated structural analysis angles and dimensions based on position
+        let angleX = Int(abs(nodePos.x * 180).truncatingRemainder(dividingBy: 360))
+        let angleY = Int(abs(nodePos.y * 180).truncatingRemainder(dividingBy: 360))
+        let width = String(format: "%.1f", abs(nodePos.x * 100))
+        let height = String(format: "%.1f", abs(nodePos.y * 100))
+        
+        let textString = "∠X:\(angleX)° ∠Y:\(angleY)°\nW:\(width)cm H:\(height)cm"
+        
+        let textGeometry = SCNText(string: textString, extrusionDepth: 0.1)
+        textGeometry.font = UIFont.monospacedSystemFont(ofSize: 0.5, weight: .bold)
+        
+        let textMaterial = SCNMaterial()
+        textMaterial.diffuse.contents = neonCyan
+        textGeometry.firstMaterial = textMaterial
+        
+        let textNode = SCNNode(geometry: textGeometry)
+        textNode.name = "dim_text"
+        
+        // Scale down the text massively since extrusionDepth of 1 is 1 meter
+        textNode.scale = SCNVector3(0.015, 0.015, 0.015)
+        textNode.position = SCNVector3(0.03, 0.03, 0)
+        
+        // Always face the camera
+        let constraint = SCNBillboardConstraint()
+        constraint.freeAxes = .all
+        textNode.constraints = [constraint]
+        
+        parentNode.addChildNode(textNode)
     }
     
     // MARK: - Trajectory Ghosting with Opacity Fade
