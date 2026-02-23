@@ -7,7 +7,6 @@ import SceneKit
 import simd
 
 @available(macOS 10.15, *)
-@available(iOS 16.0, *)
 @MainActor
 class PhysicsEngine: ObservableObject {
     static let shared = PhysicsEngine()

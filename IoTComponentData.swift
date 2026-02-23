@@ -1,7 +1,6 @@
 #if os(iOS)
 import Foundation
 
-@available(iOS 16.0, *)
 struct IoTComponent: Identifiable, Hashable {
     let id = UUID()
     let name: String
@@ -20,7 +19,6 @@ struct IoTComponent: Identifiable, Hashable {
     static func == (lhs: IoTComponent, rhs: IoTComponent) -> Bool { lhs.id == rhs.id }
 }
 
-@available(iOS 16.0, *)
 struct PinInfo: Identifiable, Hashable {
     let id = UUID()
     let pin: String
@@ -28,7 +26,6 @@ struct PinInfo: Identifiable, Hashable {
     let description: String
 }
 
-@available(iOS 16.0, *)
 enum ComponentCategory: String, CaseIterable {
     case microcontroller = "Microcontroller"
     case sensor = "Sensor"
@@ -36,7 +33,6 @@ enum ComponentCategory: String, CaseIterable {
     case network = "Network/Comm"
 }
 
-@available(iOS 16.0, *)
 struct IoTComponentsDatabase {
     static let shared = IoTComponentsDatabase()
     

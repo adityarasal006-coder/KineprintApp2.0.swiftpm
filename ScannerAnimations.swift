@@ -1,10 +1,5 @@
-#if canImport(SwiftUI)
 import SwiftUI
-#endif
 
-#if os(iOS)
-
-@available(iOS 16.0, *)
 struct HackerProcessingAnimationView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var matrixOpacity: Double = 0
@@ -84,25 +79,25 @@ struct HackerProcessingAnimationView: View {
             matrixOpacity = 1.0
             
             // Gradually pop up terminals
-            Timer.scheduledTimer(withTimeInterval: 0.15, repeats: true) { timer in
-                if terminalCount < 8 {
+            Task { @MainActor in
+                for _ in 0..<8 {
+                    try? await Task.sleep(nanoseconds: 150_000_000) // 0.15s
+                    guard !Task.isCancelled else { return }
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                         showTerminals = true
                         terminalCount += 1
                     }
-                } else {
-                    timer.invalidate()
                 }
             }
             
             // Trigger intense random glitches
-            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak viewModel] timer in
-                Task { @MainActor in
-                    if viewModel?.showCapturedBlueprint == true {
-                        timer.invalidate()
-                    } else {
-                        glitchEffect.toggle()
+            Task { @MainActor in
+                while !Task.isCancelled {
+                    if viewModel.showCapturedBlueprint {
+                        break
                     }
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                    glitchEffect.toggle()
                 }
             }
         }
@@ -132,7 +127,6 @@ extension Animation {
     }
 }
 
-@available(iOS 16.0, *)
 struct TerminalPopup: View {
     let width: CGFloat
     let height: CGFloat
@@ -181,11 +175,10 @@ struct TerminalPopup: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct HackerRainOverlay: View {
     let columns = 20
     @State private var matrixColumns: [MatrixColumn] = []
-    @State private var timer: Timer?
+    @State private var isMatrixRunning = false
 
     var body: some View {
         GeometryReader { geo in
@@ -208,19 +201,23 @@ struct HackerRainOverlay: View {
                     opacity: Double.random(in: 0.6...1.0)
                 )
             }
-            timer = Timer.scheduledTimer(withTimeInterval: 0.04, repeats: true) { _ in // Insane speed
-                for i in matrixColumns.indices {
-                    matrixColumns[i].advance()
+            isMatrixRunning = true
+            Task { @MainActor in
+                while isMatrixRunning {
+                    try? await Task.sleep(nanoseconds: 40_000_000) // 0.04s
+                    guard !Task.isCancelled && isMatrixRunning else { break }
+                    for i in matrixColumns.indices {
+                        matrixColumns[i].advance()
+                    }
                 }
             }
         }
         .onDisappear {
-            timer?.invalidate()
+            isMatrixRunning = false
         }
     }
 }
 
-@available(iOS 16.0, *)
 struct BlueprintDisplayView: View {
     @ObservedObject var viewModel: KineprintViewModel
     let entry: ResearchEntry
@@ -414,7 +411,8 @@ struct BlueprintDisplayView: View {
                 lineProgress = 1.0
                 textOpacity = 1.0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                     showDetails = true
                 }
@@ -423,7 +421,6 @@ struct BlueprintDisplayView: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct BlueprintDataNode: View {
     let title: String
     let val1: String
@@ -455,7 +452,6 @@ struct BlueprintDataNode: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct EngineeringGridBackground: View {
     let cyanColor: Color
     var body: some View {
@@ -497,5 +493,5 @@ struct EngineeringGridBackground: View {
     }
 }
 
-#endif
+
 

@@ -4,14 +4,13 @@ import SwiftUI
 // MARK: - Kinetic Energy Game
 // Concept: KE = 1/2 * m * v². Mastering the relationship between speed and energy.
 
-@available(iOS 16.0, *)
-@MainActor
 struct EnergyGameView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var score: Int
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     private let neonRed = Color(red: 1, green: 0.2, blue: 0.3)
+    private let neonYellow = Color(red: 1, green: 0.9, blue: 0.2)
     
     @State private var mass: Double = 5.0
     @State private var velocity: Double = 10.0
@@ -46,42 +45,16 @@ struct EnergyGameView: View {
                     score: totalScore,
                     streak: streak,
                     onDismiss: { dismiss() },
-                    onHint: { showHint.toggle() }
+                    onHint: { withAnimation { showHint.toggle() } }
                 )
                 
-                GeometryReader { geo in
-                    ZStack {
+                ZStack {
+                    GeometryReader { geo in
                         GridBackground(color: neonRed, size: geo.size)
-                        
-                        VStack(spacing: 0) {
-                            // Energy HUD
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("POWER_TELEMETRY")
-                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                        .foregroundColor(neonRed)
-                                    
-                                    HUDDataRow(label: "CUR_KE", value: String(format: "%.1f J", currentKE))
-                                    HUDDataRow(label: "TARGET_KE", value: String(format: "%.1f J", requiredEnergy))
-                                    HUDDataRow(label: "GRID_LOAD", value: "\(Int((currentKE/requiredEnergy)*100))%")
-                                }
-                                .padding(10)
-                                .background(Color.black.opacity(0.4))
-                                .border(neonRed.opacity(0.3), width: 1)
-                                
-                                Spacer()
-                                
-                                VStack(alignment: .trailing, spacing: 4) {
-                                    ForEach(thinkingLog, id: \.self) { log in
-                                        Text("> \(log)")
-                                            .font(.system(size: 8, design: .monospaced))
-                                            .foregroundColor(neonRed.opacity(0.7))
-                                    }
-                                }
-                                .frame(width: 150, alignment: .trailing)
-                            }
-                            .padding(16)
-                            
+                    }
+                    
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 24) {
                             if showHint {
                                 FormulaCard(
                                     lines: ["KE = ½mv²"],
@@ -90,73 +63,141 @@ struct EnergyGameView: View {
                                 .transition(.move(edge: .top).combined(with: .opacity))
                             }
                             
-                            Spacer()
+                            // Energy HUD
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "bolt.circle.fill")
+                                            .foregroundColor(neonRed)
+                                        Text("POWER_TELEMETRY").font(.system(size: 8, weight: .black, design: .monospaced)).foregroundColor(.gray)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HUDDataRow(label: "CUR_KE", value: String(format: "%.1f J", currentKE))
+                                        HUDDataRow(label: "TARGET_KE", value: String(format: "%.1f J", requiredEnergy))
+                                        
+                                        let loadRatio = (currentKE/requiredEnergy)*100
+                                        HUDDataRow(label: "GRID_LOAD", value: String(format: "%.0f%%", loadRatio))
+                                    }
+                                    .padding(10)
+                                    .background(Color.white.opacity(0.04))
+                                    .cornerRadius(10)
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(neonRed.opacity(0.2), lineWidth: 1))
+                                }
+                                
+                                Spacer()
+                                
+                                VStack(alignment: .trailing, spacing: 6) {
+                                    Text("CAPACITOR_CORE_v2")
+                                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                        .foregroundColor(neonCyan)
+                                    ForEach(thinkingLog, id: \.self) { log in
+                                        Text("> \(log)")
+                                            .font(.system(size: 8, design: .monospaced))
+                                            .foregroundColor(neonRed.opacity(0.8))
+                                    }
+                                }
+                                .frame(width: 140, alignment: .trailing)
+                            }
+                            .padding(.horizontal, 16)
                             
                             // Visual Capacitor / Energy Well
                             ZStack {
                                 // Background Battery Cell
-                                RoundedRectangle(cornerRadius: 20)
-                                    .stroke(neonRed.opacity(0.3), lineWidth: 4)
-                                    .frame(width: 120, height: 240)
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .fill(Color.black.opacity(0.8))
+                                    RoundedRectangle(cornerRadius: 24)
+                                        .stroke(LinearGradient(colors: [neonRed.opacity(0.6), neonRed.opacity(0.1)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 4)
+                                }
+                                .frame(width: 130, height: 260)
+                                .shadow(color: neonRed.opacity(0.3), radius: 20)
                                 
                                 // Filling Level
                                 VStack {
                                     Spacer()
-                                    RoundedRectangle(cornerRadius: 15)
-                                        .fill(currentKE > requiredEnergy * 1.1 ? Color.orange : (currentKE > requiredEnergy * 0.9 ? neonCyan : neonRed.opacity(0.6)))
-                                        .frame(width: 100, height: CGFloat(min(currentKE / (requiredEnergy * 1.2), 1.0)) * 220)
-                                        .shadow(color: neonRed.opacity(0.5), radius: 10)
+                                    let fillRatio = min(currentKE / (requiredEnergy * 1.3), 1.0)
+                                    let isOptimal = currentKE >= requiredEnergy * 0.9 && currentKE <= requiredEnergy * 1.1
+                                    
+                                    RoundedRectangle(cornerRadius: 18)
+                                        .fill(LinearGradient(colors: [isOptimal ? neonCyan : neonRed, (isOptimal ? neonCyan : neonRed).opacity(0.5)], startPoint: .top, endPoint: .bottom))
+                                        .frame(width: 110, height: CGFloat(fillRatio) * 240)
+                                        .shadow(color: (isOptimal ? neonCyan : neonRed).opacity(0.6), radius: 15)
+                                        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: currentKE)
                                 }
-                                .frame(width: 120, height: 240)
+                                .frame(width: 130, height: 260)
                                 
                                 // Target Line
+                                let targetRatio = requiredEnergy / (requiredEnergy * 1.3)
                                 Rectangle()
                                     .fill(Color.white)
-                                    .frame(width: 130, height: 2)
-                                    .offset(y: 120 - CGFloat(requiredEnergy / (requiredEnergy * 1.2)) * 220)
+                                    .frame(width: 150, height: 2)
+                                    .offset(y: 130 - CGFloat(targetRatio) * 260)
                                     .overlay(
-                                        Text("TARGET_LOAD")
-                                            .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                            .foregroundColor(.white)
-                                            .offset(x: 80)
+                                        HStack {
+                                            Text("TARGET_LOAD")
+                                                .font(.system(size: 8, weight: .black, design: .monospaced))
+                                                .foregroundColor(.white)
+                                                .padding(.horizontal, 6)
+                                                .padding(.vertical, 2)
+                                                .background(Color.black.opacity(0.8))
+                                                .cornerRadius(4)
+                                            Spacer()
+                                        }
+                                        .offset(x: 170, y: 130 - CGFloat(targetRatio) * 260)
                                     )
+                                    .shadow(color: .white, radius: 4)
                                 
                                 if isSimulating {
                                     // Lightning effects
-                                    ForEach(0..<5) { i in
+                                    ForEach(0..<6, id: \.self) { _ in
                                         LightningBolt()
                                             .stroke(neonCyan, lineWidth: 2)
-                                            .frame(width: 50, height: 100)
-                                            .offset(x: CGFloat.random(in: -60...60), y: CGFloat.random(in: -100...100))
+                                            .frame(width: 60, height: 120)
+                                            .offset(x: CGFloat.random(in: -50...50), y: CGFloat.random(in: -100...100))
+                                            .shadow(color: neonCyan, radius: 8)
                                     }
                                 }
                             }
-                            
-                            Spacer()
+                            .padding(.vertical, 20)
                             
                             // Control Panel
                             VStack(spacing: 20) {
-                                ScientificSlider(label: "TEST_MASS", value: $mass, range: 1...20, unit: "kg", color: .gray)
-                                ScientificSlider(label: "TEST_VELOCITY", value: $velocity, range: 1...30, unit: "m/s", color: neonCyan)
+                                ScientificSlider(label: "TEST_MASS (kg)", value: $mass, range: 1...20, unit: "kg", color: .purple)
+                                ScientificSlider(label: "TEST_VELOCITY (m/s)", value: $velocity, range: 1...30, unit: "m/s", color: neonCyan)
                                 
-                                Button(action: pulseGrid) {
-                                    Text(isSimulating ? "CHARGING..." : "PULSE GRID")
-                                        .font(.system(size: 16, weight: .bold, design: .monospaced))
-                                        .foregroundColor(.black)
+                                if !showResult {
+                                    let isOptimal = currentKE >= requiredEnergy * 0.9 && currentKE <= requiredEnergy * 1.1
+                                    Button(action: pulseGrid) {
+                                        HStack {
+                                            Image(systemName: isSimulating ? "bolt.batteryblock.fill" : "bolt.fill")
+                                            Text(isSimulating ? "DISCHARGING..." : "PULSE_GRID")
+                                        }
+                                        .font(.system(size: 14, weight: .black, design: .monospaced))
+                                        .foregroundColor(isOptimal ? .black : .white)
                                         .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 16)
-                                        .background(isSimulating ? Color.gray : (currentKE > requiredEnergy * 0.9 && currentKE < requiredEnergy * 1.1 ? neonCyan : neonRed))
-                                        .cornerRadius(12)
+                                        .padding(.vertical, 18)
+                                        .background(isSimulating ? Color.gray : (isOptimal ? neonCyan : neonRed))
+                                        .cornerRadius(14)
+                                        .shadow(color: isSimulating ? .clear : (isOptimal ? neonCyan.opacity(0.4) : neonRed.opacity(0.3)), radius: 10)
+                                    }
+                                    .disabled(isSimulating)
                                 }
-                                .disabled(isSimulating)
                             }
                             .padding(20)
-                            .background(Color.black.opacity(0.6))
+                            .background(Color.white.opacity(0.04))
+                            .cornerRadius(24)
+                            .padding(.horizontal, 16)
+                            
+                            if showResult {
+                                ResultOverlay(accuracy: accuracy, onNext: nextLevel, onRetry: resetParams)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                                    .padding(.horizontal, 16)
+                            }
+                            
+                            Spacer().frame(height: 40)
                         }
-                        
-                        if showResult {
-                            ResultOverlay(accuracy: accuracy, onNext: nextLevel, onRetry: reset)
-                        }
+                        .padding(.top, 20)
                     }
                 }
             }
@@ -165,9 +206,11 @@ struct EnergyGameView: View {
     
     private func pulseGrid() {
         isSimulating = true
+        showResult = false
         updateLog("INITIATING_DISCHARGE...")
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
             isSimulating = false
             evaluate()
         }
@@ -188,16 +231,17 @@ struct EnergyGameView: View {
             streak = 0
             updateLog("ERROR: LOAD_MISMATCH")
         }
-        showResult = true
+        
+        withAnimation(.spring()) { showResult = true }
     }
     
     private func nextLevel() {
-        level = min(level + 1, 5)
-        reset()
+        level = min(level + 1, 10)
+        resetParams()
     }
     
-    private func reset() {
-        showResult = false
+    private func resetParams() {
+        withAnimation { showResult = false }
         accuracy = 0
         updateLog("RECALIBRATING_GRID")
     }
@@ -210,14 +254,14 @@ struct EnergyGameView: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct LightningBolt: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        let startX = rect.midX + CGFloat.random(in: -10...10)
+        path.move(to: CGPoint(x: startX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + CGFloat.random(in: 0...10), y: rect.midY - CGFloat.random(in: 0...10)))
+        path.addLine(to: CGPoint(x: rect.maxX - CGFloat.random(in: 0...10), y: rect.midY + CGFloat.random(in: 0...10)))
+        path.addLine(to: CGPoint(x: rect.midX + CGFloat.random(in: -10...10), y: rect.maxY))
         return path
     }
 }

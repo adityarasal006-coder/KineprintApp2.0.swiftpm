@@ -1,7 +1,5 @@
-#if os(iOS)
 import SwiftUI
 
-@available(iOS 16.0, *)
 struct LearningLabView: View {
     @StateObject private var challengeManager = ChallengeManager()
     
@@ -33,83 +31,104 @@ struct LearningLabView: View {
     
     var body: some View {
         ZStack {
-                // Background: Blueprint Grid
-                Color.black.ignoresSafeArea()
+            Color.black.ignoresSafeArea()
+            
+            // Dynamic Grid Background
+            GeometryReader { geo in
+                GridBackground(color: neonCyan, size: geo.size)
+            }
+            .ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                // Custom Lab Header
+                LabHeaderView(totalScore: totalGameScore)
                 
-                GeometryReader { geo in
-                    ZStack {
-                        ForEach(0..<10) { i in
-                            Path { path in
-                                path.move(to: CGPoint(x: 0, y: geo.size.height / 10 * CGFloat(i)))
-                                path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 10 * CGFloat(i)))
-                            }
-                            .stroke(neonCyan.opacity(0.1), lineWidth: 0.5)
-                        }
-                    }
-                }
-                .ignoresSafeArea()
-                
-                VStack(spacing: 16) {
-                    // Removed redundant header to fix "nonsense" layout overlap
-                    
-                    // Challenge Selection — each button opens its game
-                    ChallengeSelectionView(
-                        challengeManager: challengeManager,
-                        onSelectTrajectory: { showTrajectoryGame = true },
-                        onSelectVelocity: { showVelocityGame = true },
-                        onSelectOscillation: { showOscillationGame = true },
-                        onSelectLanding: { showLandingGame = true },
-                        onSelectMomentum: { showMomentumGame = true },
-                        onSelectCollision: { showCollisionGame = true },
-                        onSelectCentripetal: { showCentripetalGame = true },
-                        onSelectEnergy: { showEnergyGame = true }
-                    )
-                    
-                    ScrollView {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        // Challenge Selection
+                        ChallengeSelectionView(
+                            challengeManager: challengeManager,
+                            onSelectTrajectory: { showTrajectoryGame = true },
+                            onSelectVelocity: { showVelocityGame = true },
+                            onSelectOscillation: { showOscillationGame = true },
+                            onSelectLanding: { showLandingGame = true },
+                            onSelectMomentum: { showMomentumGame = true },
+                            onSelectCollision: { showCollisionGame = true },
+                            onSelectCentripetal: { showCentripetalGame = true },
+                            onSelectEnergy: { showEnergyGame = true }
+                        )
+                        
+                        // Main Dashboard Section
                         VStack(spacing: 20) {
-                            // Current Challenge Display
                             CurrentChallengeView(challenge: challengeManager.currentChallenge, challengeManager: challengeManager)
                             
-                            // Performance Metrics
                             PerformanceMetricsView(challengeManager: challengeManager)
                             
-                            // Physics Insights Section
                             PhysicsInsightView(challengeManager: challengeManager)
-                            
-                            Spacer().frame(height: 80)
                         }
+                        .padding(.horizontal, 16)
+                        
+                        Spacer().frame(height: 100)
                     }
+                    .padding(.top, 16)
                 }
             }
+        }
         .preferredColorScheme(.dark)
-        .fullScreenCover(isPresented: $showTrajectoryGame) {
-            TrajectoryGameView(score: $trajectoryScore)
-        }
-        .fullScreenCover(isPresented: $showVelocityGame) {
-            VelocityGameView(score: $velocityScore)
-        }
-        .fullScreenCover(isPresented: $showOscillationGame) {
-            OscillationGameView(score: $oscillationScore)
-        }
-        .fullScreenCover(isPresented: $showLandingGame) {
-            LandingGameView(score: $landingScore)
-        }
-        .fullScreenCover(isPresented: $showMomentumGame) {
-            MomentumGameView(score: $momentumScore)
-        }
-        .fullScreenCover(isPresented: $showCollisionGame) {
-            CollisionGameView(score: $collisionScore)
-        }
-        .fullScreenCover(isPresented: $showCentripetalGame) {
-            CentripetalGameView(score: $centripetalScore)
-        }
-        .fullScreenCover(isPresented: $showEnergyGame) {
-            EnergyGameView(score: $energyScore)
-        }
+        .fullScreenCover(isPresented: $showTrajectoryGame) { TrajectoryGameView(score: $trajectoryScore) }
+        .fullScreenCover(isPresented: $showVelocityGame) { VelocityGameView(score: $velocityScore) }
+        .fullScreenCover(isPresented: $showOscillationGame) { OscillationGameView(score: $oscillationScore) }
+        .fullScreenCover(isPresented: $showLandingGame) { LandingGameView(score: $landingScore) }
+        .fullScreenCover(isPresented: $showMomentumGame) { MomentumGameView(score: $momentumScore) }
+        .fullScreenCover(isPresented: $showCollisionGame) { CollisionGameView(score: $collisionScore) }
+        .fullScreenCover(isPresented: $showCentripetalGame) { CentripetalGameView(score: $centripetalScore) }
+        .fullScreenCover(isPresented: $showEnergyGame) { EnergyGameView(score: $energyScore) }
     }
 }
 
-@available(iOS 16.0, *)
+struct LabHeaderView: View {
+    let totalScore: Int
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("LEARNING_LAB_v4.0")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                    Text("KINEMATIC_SIMULATION_HUB")
+                        .font(.system(size: 18, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                }
+                
+                Spacer()
+                
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("EXP_EARNED")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(.gray)
+                    Text("\(totalScore)")
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.05))
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(neonCyan.opacity(0.2), lineWidth: 1))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 20)
+            
+            Rectangle()
+                .fill(LinearGradient(colors: [neonCyan.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing))
+                .frame(height: 1)
+        }
+        .background(Color.black.opacity(0.85))
+    }
+}
+
 struct ChallengeSelectionView: View {
     @ObservedObject var challengeManager: ChallengeManager
     let onSelectTrajectory: () -> Void
@@ -124,51 +143,36 @@ struct ChallengeSelectionView: View {
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
-        VStack(spacing: 12) {
-            Text("TAP A CHALLENGE TO PLAY")
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundColor(.gray)
-                .padding(.horizontal, 16)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("AVAILABLE_SIMULATIONS")
+                    .font(.system(size: 12, weight: .black, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
+                Text("SCANNING...")
+                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                    .foregroundColor(neonCyan)
+            }
+            .padding(.horizontal, 20)
             
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: 16) {
                     ForEach(ChallengeType.allCases, id: \.self) { type in
-                        ChallengeButtonView(
+                        ChallengeCardView(
                             type: type,
                             isSelected: challengeManager.selectedChallengeType == type,
                             action: {
-                                challengeManager.selectChallenge(type)
-                                handleSelection(type)
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                    challengeManager.selectChallenge(type)
+                                    handleSelection(type)
+                                }
                             }
                         )
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
             }
         }
-        .padding(.vertical, 14)
-        .background(
-            ZStack {
-                Color.black.opacity(0.6)
-                // Decorative diagonal lines
-                GeometryReader { geo in
-                    Path { p in
-                        for i in 0..<10 {
-                            let x = CGFloat(i) * 50
-                            p.move(to: CGPoint(x: x, y: 0))
-                            p.addLine(to: CGPoint(x: x + 100, y: geo.size.height))
-                        }
-                    }
-                    .stroke(neonCyan.opacity(0.05), lineWidth: 1)
-                }
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(neonCyan.opacity(0.2), lineWidth: 1)
-        )
-        .padding(.horizontal, 16)
     }
     
     private func handleSelection(_ type: ChallengeType) {
@@ -185,8 +189,7 @@ struct ChallengeSelectionView: View {
     }
 }
 
-@available(iOS 16.0, *)
-struct ChallengeButtonView: View {
+struct ChallengeCardView: View {
     let type: ChallengeType
     let isSelected: Bool
     let action: () -> Void
@@ -195,39 +198,62 @@ struct ChallengeButtonView: View {
     
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 6) {
-                Image(systemName: type.icon)
-                    .font(.system(size: 24))
-                    .foregroundColor(isSelected ? neonCyan : .gray)
+            VStack(alignment: .leading, spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isSelected ? neonCyan : Color.white.opacity(0.05))
+                        .frame(width: 44, height: 44)
+                    
+                    Image(systemName: type.icon)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(isSelected ? .black : .white)
+                }
                 
-                Text(type.rawValue)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(isSelected ? neonCyan : .gray)
-                    .multilineTextAlignment(.center)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(type.rawValue.uppercased())
+                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                        .foregroundColor(isSelected ? neonCyan : .white)
+                    Text("PROB_SIM_LVL_\(Int.random(in: 1...5))")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundColor(.gray)
+                }
                 
-                Text("▶ PLAY")
-                    .font(.system(size: 8, weight: .heavy, design: .monospaced))
-                    .foregroundColor(isSelected ? .black : neonCyan.opacity(0.5))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(isSelected ? neonCyan : neonCyan.opacity(0.1))
-                    .cornerRadius(6)
+                Spacer()
+                
+                HStack {
+                    Text("ENGAGE_LINK")
+                        .font(.system(size: 8, weight: .black, design: .monospaced))
+                        .foregroundColor(isSelected ? .black : neonCyan)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(isSelected ? .black : neonCyan)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(isSelected ? neonCyan : neonCyan.opacity(0.1))
+                .cornerRadius(6)
             }
-            .frame(width: 80, height: 88)
+            .padding(14)
+            .frame(width: 140, height: 160)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(isSelected ? Color(red: 0, green: 0.15, blue: 0.13) : Color.black.opacity(0.3))
+                ZStack {
+                    Color.black.opacity(0.6)
+                    if isSelected {
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(neonCyan, lineWidth: 2)
+                            .shadow(color: neonCyan.opacity(0.3), radius: 10)
+                    } else {
+                        RoundedRectangle(cornerRadius: 20)
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    }
+                }
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(isSelected ? neonCyan : Color.white.opacity(0.1), lineWidth: isSelected ? 1.5 : 0.5)
-            )
-            .shadow(color: isSelected ? neonCyan.opacity(0.2) : .clear, radius: 8)
+            .cornerRadius(20)
         }
     }
 }
 
-@available(iOS 16.0, *)
 struct CurrentChallengeView: View {
     var challenge: Challenge?
     @ObservedObject var challengeManager: ChallengeManager
@@ -235,255 +261,273 @@ struct CurrentChallengeView: View {
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
-        VStack(spacing: 12) {
-            Text("CURRENT CHALLENGE")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(.gray)
-                .padding(.horizontal, 16)
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("SELECTED_EXP_DATA")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
+                if challenge != nil {
+                    Text("ACTIVE_SIM")
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(neonCyan.opacity(0.1))
+                        .cornerRadius(4)
+                }
+            }
+            .padding(16)
             
             if let challenge = challenge {
-                VStack(spacing: 16) {
-                    Text(challenge.title)
-                        .font(.system(size: 18, weight: .bold, design: .monospaced))
-                        .foregroundColor(neonCyan)
-                        .multilineTextAlignment(.center)
+                VStack(spacing: 20) {
+                    VStack(spacing: 8) {
+                        Text(challenge.title)
+                            .font(.system(size: 20, weight: .black, design: .monospaced))
+                            .foregroundColor(.white)
+                        
+                        Text(challenge.description)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(.gray)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                    }
                     
-                    Text(challenge.description)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundColor(.gray)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 20)
-                    
-                    // Challenge objective display
-                    HStack {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("TARGET:")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
+                    // Stats Cluster
+                    HStack(spacing: 20) {
+                        ChallengeValueBox(label: "INIT_TARGET", value: challenge.targetValue.formattedChallengeValue, color: .gray)
+                        
+                        Spacer()
+                        
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white.opacity(0.05), lineWidth: 6)
+                                .frame(width: 80, height: 80)
                             
-                            Text(challenge.targetValue.formattedChallengeValue)
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundColor(neonCyan)
+                            Circle()
+                                .trim(from: 0, to: CGFloat(challenge.progress))
+                                .stroke(
+                                    AngularGradient(colors: [neonCyan, .blue, neonCyan], center: .center),
+                                    style: StrokeStyle(lineWidth: 6, lineCap: .round)
+                                )
+                                .frame(width: 80, height: 80)
+                                .rotationEffect(.degrees(-90))
+                            
+                            VStack(spacing: 0) {
+                                Text("\(Int(challenge.progress * 100))")
+                                    .font(.system(size: 24, weight: .black, design: .monospaced))
+                                    .foregroundColor(.white)
+                                Text("%")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.gray)
+                            }
                         }
                         
                         Spacer()
                         
-                        VStack(alignment: .trailing, spacing: 8) {
-                            Text("CURRENT:")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(.gray)
-                            
-                            Text(challenge.currentValue.formattedChallengeValue)
-                                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                                .foregroundColor(challenge.isCompleted ? Color.green : neonCyan)
-                        }
+                        ChallengeValueBox(label: "LIVE_READOUT", value: challenge.currentValue.formattedChallengeValue, color: neonCyan)
                     }
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, 24)
                     
-                    // Progress indicator
-                    VStack(spacing: 4) {
-                        Text("PROGRESS: \(Int(challenge.progress * 100))%")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundColor(.gray)
-                        
-                        ProgressView(value: challenge.progress, total: 1.0)
-                            .progressViewStyle(LinearProgressViewStyle())
-                            .accentColor(neonCyan)
-                    }
-                    .padding(.horizontal, 20)
-                    
-                    // Start/Pause button
+                    // Control
                     Button(action: {
-                        if challengeManager.isRunning {
-                            challengeManager.pauseChallenge()
-                        } else {
-                            challengeManager.startChallenge()
+                        withAnimation(.spring()) {
+                            if challengeManager.isRunning {
+                                challengeManager.pauseChallenge()
+                            } else {
+                                challengeManager.startChallenge()
+                            }
                         }
                     }) {
-                        Text(challengeManager.isRunning ? "PAUSE" : "START")
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
-                            .foregroundColor(.black)
-                            .padding(.vertical, 12)
-                            .frame(maxWidth: .infinity)
-                            .background(neonCyan)
-                            .cornerRadius(10)
+                        HStack {
+                            Image(systemName: challengeManager.isRunning ? "pause.fill" : "play.fill")
+                            Text(challengeManager.isRunning ? "SUSPEND_CALCULATION" : "INITIALIZE_CORE_STREAM")
+                        }
+                        .font(.system(size: 13, weight: .black, design: .monospaced))
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(challengeManager.isRunning ? Color.orange : neonCyan)
+                        .cornerRadius(12)
+                        .shadow(color: (challengeManager.isRunning ? Color.orange : neonCyan).opacity(0.3), radius: 10)
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 16)
                 }
             } else {
-                Text("SELECT A CHALLENGE")
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(.gray)
-                    .frame(maxWidth: .infinity, maxHeight: 120)
-                    .background(Color.black.opacity(0.4))
-                    .cornerRadius(10)
+                VStack(spacing: 12) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 40))
+                        .foregroundColor(.white.opacity(0.1))
+                    Text("AWAITING_SIMULATION_LINK")
+                        .font(.system(size: 12, weight: .black, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.2))
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 200)
             }
         }
-        .padding(.vertical, 10)
-        .background(
-            VisualEffectBlur(blurStyle: .systemUltraThinMaterialDark) {
-                Rectangle().fill(Color.clear)
-            }
-            .opacity(0.85)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(neonCyan.opacity(0.15), lineWidth: 0.5)
-        )
-        .padding(.horizontal, 16)
+        .background(Color.white.opacity(0.03))
+        .cornerRadius(24)
+        .overlay(RoundedRectangle(cornerRadius: 24).stroke(Color.white.opacity(0.1), lineWidth: 1))
     }
 }
 
-@available(iOS 16.0, *)
-struct PerformanceMetricsView: View {
-    @ObservedObject var challengeManager: ChallengeManager
-    
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            Text("PERFORMANCE METRICS")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(.gray)
-                .padding(.horizontal, 16)
-            
-            HStack {
-                MetricCard(
-                    title: "ACCURACY",
-                    value: "\(Int(challengeManager.performanceMetrics.accuracy * 100))%",
-                    color: Color.green,
-                    icon: "target"
-                )
-                
-                MetricCard(
-                    title: "SMOOTHNESS",
-                    value: "\(Int(challengeManager.performanceMetrics.smoothness * 100))%",
-                    color: Color.blue,
-                    icon: "figure.walk.motion"
-                )
-            }
-            
-            HStack {
-                MetricCard(
-                    title: "EFFICIENCY",
-                    value: "\(Int(challengeManager.performanceMetrics.efficiency * 100))%",
-                    color: Color.yellow,
-                    icon: "bolt.fill"
-                )
-                
-                MetricCard(
-                    title: "STABILITY",
-                    value: "\(Int(challengeManager.performanceMetrics.stability * 100))%",
-                    color: Color.purple,
-                    icon: "balance"
-                )
-            }
-        }
-        .padding(.vertical, 10)
-        .background(
-            VisualEffectBlur(blurStyle: .systemUltraThinMaterialDark) {
-                Rectangle().fill(Color.clear)
-            }
-            .opacity(0.85)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(neonCyan.opacity(0.15), lineWidth: 0.5)
-        )
-        .padding(.horizontal, 16)
-    }
-}
-
-@available(iOS 16.0, *)
-struct MetricCard: View {
-    let title: String
+struct ChallengeValueBox: View {
+    let label: String
     let value: String
     let color: Color
-    let icon: String
     
     var body: some View {
-        VStack(spacing: 6) {
-            HStack {
-                Image(systemName: icon)
-                    .foregroundColor(color)
-                    .font(.system(size: 14))
-                
-                Spacer()
-            }
-            
-            Text(title)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.system(size: 7, weight: .bold, design: .monospaced))
                 .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-            
             Text(value)
-                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .font(.system(size: 16, weight: .black, design: .monospaced))
                 .foregroundColor(color)
         }
-        .frame(maxWidth: .infinity, minHeight: 80)
-        .padding(12)
-        .background(Color.black.opacity(0.4))
-        .cornerRadius(10)
     }
 }
 
-@available(iOS 16.0, *)
-struct PhysicsInsightView: View {
+struct PerformanceMetricsView: View {
     @ObservedObject var challengeManager: ChallengeManager
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("BIOMETRIC_FEEDBACK_ANALYSIS")
+                .font(.system(size: 10, weight: .black, design: .monospaced))
+                .foregroundColor(.white.opacity(0.5))
+                .padding(.horizontal, 4)
+            
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                MetricCard(title: "ACCURACY", value: challengeManager.performanceMetrics.accuracy, icon: "target", color: .green)
+                MetricCard(title: "SMOOTHNESS", value: challengeManager.performanceMetrics.smoothness, icon: "figure.walk.motion", color: .blue)
+                MetricCard(title: "EFFICIENCY", value: challengeManager.performanceMetrics.efficiency, icon: "bolt.fill", color: .yellow)
+                MetricCard(title: "STABILITY", value: challengeManager.performanceMetrics.stability, icon: "balance", color: .purple)
+            }
+        }
+    }
+}
+
+struct MetricCard: View {
+    let title: String
+    let value: Float
+    let icon: String
+    let color: Color
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Image(systemName: "sparkles")
-                    .foregroundColor(.yellow)
-                Text("PHYSICS INSIGHT")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundColor(neonCyan)
+                Image(systemName: icon)
+                    .foregroundColor(color)
                 Spacer()
+                Text("\(Int(value * 100))%")
+                    .font(.system(size: 14, weight: .black, design: .monospaced))
+                    .foregroundColor(color)
             }
             
-            Text(currentInsight)
+            Text(title)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(.gray)
+            
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.white.opacity(0.05))
+                    .frame(height: 3)
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(color)
+                    .frame(width: CGFloat(value) * 60, height: 3) // Hardcoded width for grid item
+                    .shadow(color: color.opacity(0.4), radius: 2)
+            }
+        }
+        .padding(14)
+        .background(Color.white.opacity(0.03))
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.1), lineWidth: 1))
+    }
+}
+
+struct PhysicsInsightView: View {
+    @ObservedObject var challengeManager: ChallengeManager
+    @State private var displayedText: String = ""
+    @State private var typingTask: Task<Void, Never>?
+    
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "sparkles")
+                    .foregroundColor(.yellow)
+                    .font(.system(size: 14))
+                Text("NEURAL_PHYSICS_ADVISOR")
+                    .font(.system(size: 10, weight: .black, design: .monospaced))
+                    .foregroundColor(neonCyan)
+                Spacer()
+                Circle()
+                    .fill(neonCyan)
+                    .frame(width: 4, height: 4)
+                    .opacity(challengeManager.isRunning ? 1.0 : 0.0)
+                    .animation(.easeInOut(duration: 0.5).repeatForever(), value: challengeManager.isRunning)
+            }
+            
+            Text(displayedText)
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundColor(.white.opacity(0.9))
                 .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                .id(challengeManager.selectedChallengeType)
+                .onChange(of: challengeManager.selectedChallengeType) { _ in
+                    startTyping()
+                }
         }
-        .padding(16)
+        .padding(20)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.blue.opacity(0.1))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(neonCyan.opacity(0.3), lineWidth: 1)
-                )
+            ZStack {
+                Color.blue.opacity(0.05)
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(neonCyan.opacity(0.2), lineWidth: 1)
+            }
         )
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .animation(.spring(), value: challengeManager.selectedChallengeType)
+        .onAppear {
+            startTyping()
+        }
+    }
+    
+    private func startTyping() {
+        typingTask?.cancel()
+        displayedText = ""
+        let fullText = currentInsight
+        
+        typingTask = Task {
+            for char in fullText {
+                if Task.isCancelled { break }
+                displayedText.append(char)
+                try? await Task.sleep(nanoseconds: 15_000_000) // 0.015s
+            }
+        }
     }
     
     private var currentInsight: String {
         guard let type = challengeManager.selectedChallengeType else {
-            return "Select a challenge to receive expert physics insights and master the laws of motion."
+            return "AWAITING_SIMULATION_LINK. SELECT A CHALLENGE TO RECEIVE EXPERT KINEMATIC INSIGHTS."
         }
         switch type {
-        case .matchTrajectory: return "Did you know? Projectiles follow a parabolic path because gravity only acts vertically, creating constant vertical acceleration while horizontal velocity remains constant."
-        case .optimizeVelocity: return "Velocity is a vector quantity. To optimize, you must manage both magnitude (speed) and direction perfectly. Smooth transitions reduce energy loss."
-        case .stabilizeOscillation: return "Damping is the process of reducing oscillation amplitude. In engineering, critical damping prevents overshoot and reaches equilibrium fastest."
-        case .landingPrediction: return "Air resistance (drag) significantly affects long-range trajectories. For heavy objects, the impact of drag is lower relative to their inertia."
-        case .momentumTransfer: return "Momentum (p = mv) is always conserved in a closed system. Impulse is the change in momentum caused by a force applied over time."
-        case .elasticCollision: return "In a perfectly elastic collision, both momentum and kinetic energy are conserved. Real-world collisions are usually 'partially inelastic'."
-        case .centripetalForce: return "Centripetal force is not a 'new' force, but a requirement for circular motion, provided by tension, gravity, or friction toward the center."
-        case .kineticEnergy: return "Kinetic Energy increases with the square of velocity (KE = ½mv²). Doubling your speed quadruples the energy required!"
+        case .matchTrajectory: return "> Projectiles follow a parabolic trajectory because gravity only acts vertically. Horizontal velocity remains constant (negligible drag)."
+        case .optimizeVelocity: return "> Velocity is a vector. To optimize efficiency, maintain a constant kinetic link. Rapid acceleration spikes waste electrical energy."
+        case .stabilizeOscillation: return "> Damping coefficient (b) must be tuned to critical levels (ζ = 1) to eliminate oscillation without causing sluggish response times."
+        case .landingPrediction: return "> Calculating impact coordinates requires integrating instantaneous acceleration. Note: Air density fluctuations may introduce 2-5% error margin."
+        case .momentumTransfer: return "> Momentum (p) is conserved. Impulse (J) is the integral of force over time. Aim for a high-impulse impact for maximum energy transfer."
+        case .elasticCollision: return "> In perfectly elastic collisions, kinetic energy is preserved. Watch for the coefficient of restitution; inelasticity causes thermal dissipation."
+        case .centripetalForce: return "> Centripetal acceleration (a = v²/r) is always normal to the velocity vector. Increasing velocity requires exponential force increases to stay in orbit."
+        case .kineticEnergy: return "> Observe the non-linear relationship: doubling your velocity requires four times the energy output. Efficiency is found in steady-state motion."
         }
     }
 }
 
-@available(iOS 16.0, *)
 enum ChallengeType: String, CaseIterable {
     case matchTrajectory = "Match Trajectory"
     case optimizeVelocity = "Optimize Velocity"
@@ -508,7 +552,6 @@ enum ChallengeType: String, CaseIterable {
     }
 }
 
-@available(iOS 16.0, *)
 struct Challenge: Identifiable {
     let id = UUID()
     let type: ChallengeType
@@ -520,7 +563,6 @@ struct Challenge: Identifiable {
     var isCompleted: Bool = false
 }
 
-@available(iOS 16.0, *)
 struct PerformanceMetrics {
     var accuracy: Float = 0.0
     var smoothness: Float = 0.0
@@ -528,15 +570,12 @@ struct PerformanceMetrics {
     var stability: Float = 0.0
 }
 
-@available(iOS 16.0, *)
 @MainActor
 class ChallengeManager: ObservableObject {
     @Published var selectedChallengeType: ChallengeType?
     @Published var currentChallenge: Challenge?
     @Published var isRunning = false
     @Published var performanceMetrics = PerformanceMetrics()
-    
-    private var timer: Timer?
     
     func selectChallenge(_ type: ChallengeType) {
         selectedChallengeType = type
@@ -572,16 +611,17 @@ class ChallengeManager: ObservableObject {
     }
     
     private func startTimer() {
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.updateChallengeProgress()
+        Task { @MainActor in
+            while isRunning {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                guard !Task.isCancelled && isRunning else { break }
+                self.updateChallengeProgress()
             }
         }
     }
     
     private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+        // Task loop handles cancellation via isRunning check
     }
     
     private func updateChallengeProgress() {
@@ -624,4 +664,4 @@ extension Float {
         }
     }
 }
-#endif
+

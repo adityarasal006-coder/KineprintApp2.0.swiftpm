@@ -4,7 +4,6 @@ import SwiftUI
 // MARK: - Shared Game UI Components
 // Used by TrajectoryGameView, VelocityGameView, OscillationGameView, LandingGameView
 
-@available(iOS 16.0, *)
 @MainActor
 struct GameHeader: View {
     let title: String
@@ -19,58 +18,92 @@ struct GameHeader: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 12) {
+            HStack(alignment: .center, spacing: 14) {
                 Button(action: onDismiss) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.gray)
-                }
-                
-                Image(systemName: icon)
-                    .foregroundColor(neonCyan)
-                    .font(.system(size: 18, weight: .bold))
-                
-                Text(title)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(neonCyan)
-                    .lineLimit(1)
-                
-                Spacer()
-                
-                // Streak badge
-                if streak > 0 {
-                    HStack(spacing: 3) {
-                        Text("🔥")
-                            .font(.system(size: 14))
-                        Text("×\(streak)")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(.orange)
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.1))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
                     }
                 }
                 
-                // Score
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("LV \(level)")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundColor(.gray)
-                    Text("\(score)")
-                        .font(.system(size: 16, weight: .heavy, design: .monospaced))
-                        .foregroundColor(neonCyan)
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(neonCyan.opacity(0.1))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: icon)
+                            .foregroundColor(neonCyan)
+                            .font(.system(size: 18, weight: .bold))
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                            .foregroundColor(.white)
+                        Text("SYSTEM_LINK: ACTIVE")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(neonCyan.opacity(0.6))
+                    }
+                }
+                
+                Spacer()
+                
+                // Status Badges
+                HStack(spacing: 8) {
+                    if streak > 0 {
+                        HStack(spacing: 4) {
+                            Text("🔥")
+                            Text("\(streak)")
+                                .font(.system(size: 11, weight: .black, design: .monospaced))
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.orange.opacity(0.2))
+                        .cornerRadius(6)
+                        .scaleEffect(1.1)
+                    }
+                    
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("TOTAL_ACC")
+                            .font(.system(size: 7, weight: .bold, design: .monospaced))
+                            .foregroundColor(.gray)
+                        Text("\(score)")
+                            .font(.system(size: 15, weight: .black, design: .monospaced))
+                            .foregroundColor(neonCyan)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Color.white.opacity(0.05))
+                    .cornerRadius(8)
                 }
                 
                 // Hint button
                 Button(action: onHint) {
-                    Image(systemName: "lightbulb.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.yellow.opacity(0.8))
+                    ZStack {
+                        Circle()
+                            .fill(Color.yellow.opacity(0.1))
+                            .frame(width: 32, height: 32)
+                        Image(systemName: "lightbulb.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.yellow)
+                    }
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color.black.opacity(0.8))
+            .padding(.vertical, 14)
+            .background(
+                ZStack {
+                    Color.black
+                    LinearGradient(colors: [Color.white.opacity(0.05), .clear], startPoint: .top, endPoint: .bottom)
+                }
+            )
             
             Rectangle()
-                .fill(neonCyan.opacity(0.25))
+                .fill(LinearGradient(colors: [neonCyan.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing))
                 .frame(height: 1)
         }
     }
@@ -78,7 +111,6 @@ struct GameHeader: View {
 
 // MARK: - Formula Hint Card
 
-@available(iOS 16.0, *)
 @MainActor
 struct FormulaCard: View {
     let lines: [String]
@@ -125,42 +157,58 @@ struct FormulaCard: View {
 
 // MARK: - Grid Background
 
-@available(iOS 16.0, *)
 @MainActor
 struct GridBackground: View {
     let color: Color
     let size: CGSize
     @State private var scanPos: CGFloat = 0
+    @State private var opac: Double = 0.0
     
     var body: some View {
         ZStack {
             Color.black
-            let colCount = Int(size.width / 30) + 1
-            let rowCount = Int(size.height / 30) + 1
             
-            ForEach(0..<colCount, id: \.self) { i in
-                Path { p in
-                    p.move(to: CGPoint(x: Double(i) * 30, y: 0))
-                    p.addLine(to: CGPoint(x: Double(i) * 30, y: size.height))
+            // Subtle Radial Glow
+            RadialGradient(colors: [color.opacity(0.08), .clear], center: .center, startRadius: 0, endRadius: max(size.width, size.height))
+                .ignoresSafeArea()
+            
+            let spacing: CGFloat = 30
+            let colCount = Int(size.width / spacing) + 1
+            let rowCount = Int(size.height / spacing) + 1
+            
+            Group {
+                ForEach(0..<colCount, id: \.self) { i in
+                    Path { p in
+                        p.move(to: CGPoint(x: CGFloat(i) * spacing, y: 0))
+                        p.addLine(to: CGPoint(x: CGFloat(i) * spacing, y: size.height))
+                    }
+                    .stroke(color.opacity(0.06), lineWidth: 0.5)
                 }
-                .stroke(color.opacity(0.07), lineWidth: 0.5)
-            }
-            ForEach(0..<rowCount, id: \.self) { i in
-                Path { p in
-                    p.move(to: CGPoint(x: 0, y: Double(i) * 30))
-                    p.addLine(to: CGPoint(x: size.width, y: Double(i) * 30))
+                ForEach(0..<rowCount, id: \.self) { i in
+                    Path { p in
+                        p.move(to: CGPoint(x: 0, y: CGFloat(i) * spacing))
+                        p.addLine(to: CGPoint(x: size.width, y: CGFloat(i) * spacing))
+                    }
+                    .stroke(color.opacity(0.06), lineWidth: 0.5)
                 }
-                .stroke(color.opacity(0.07), lineWidth: 0.5)
             }
+            .opacity(opac)
             
             // Neon scan line
-            Rectangle()
-                .fill(LinearGradient(colors: [.clear, color.opacity(0.15), .clear], startPoint: .top, endPoint: .bottom))
-                .frame(height: 100)
-                .offset(y: -50 + scanPos * (size.height + 100))
+            ZStack {
+                Rectangle()
+                    .fill(LinearGradient(colors: [.clear, color.opacity(0.2), .clear], startPoint: .top, endPoint: .bottom))
+                    .frame(height: 120)
+                Rectangle()
+                    .fill(color.opacity(0.5))
+                    .frame(height: 1)
+                    .shadow(color: color, radius: 4)
+            }
+            .offset(y: -60 + scanPos * (size.height + 120))
         }
         .onAppear {
-            withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
+            withAnimation(.easeIn(duration: 1.0)) { opac = 1.0 }
+            withAnimation(.linear(duration: 5.0).repeatForever(autoreverses: false)) {
                 scanPos = 1.0
             }
         }
@@ -169,7 +217,6 @@ struct GridBackground: View {
 
 // MARK: - Result Overlay (used by TrajectoryGameView)
 
-@available(iOS 16.0, *)
 @MainActor
 struct ResultOverlay: View {
     let accuracy: Double
@@ -178,10 +225,10 @@ struct ResultOverlay: View {
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var grade: String {
-        if accuracy > 0.85 { return "PERFECT TRAJECTORY! 🎯" }
-        else if accuracy > 0.65 { return "NICE CURVE! ✅" }
-        else if accuracy > 0.45 { return "GETTING THERE 📈" }
-        else { return "KEEP PRACTICING 🔄" }
+        if accuracy > 0.85 { return "PERFECT_SIMULATION" }
+        else if accuracy > 0.65 { return "HIGH_ACCURACY_DETECTED" }
+        else if accuracy > 0.45 { return "MARGINAL_STABILITY" }
+        else { return "CALIBRATION_REQUIRED" }
     }
     
     var gradeColor: Color {
@@ -196,60 +243,88 @@ struct ResultOverlay: View {
                 ConfettiBurstView(color: neonCyan)
             }
             
-            VStack(spacing: 14) {
-                Text(grade)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(gradeColor)
-                    .multilineTextAlignment(.center)
+            VStack(spacing: 20) {
+                // Header
+                HStack {
+                    ZStack {
+                        Circle().stroke(gradeColor.opacity(0.3), lineWidth: 1).frame(width: 44, height: 44)
+                        Image(systemName: accuracy > 0.65 ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(gradeColor)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(grade)
+                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                            .foregroundColor(gradeColor)
+                        Text("ANALYTIC_REPORT_v2.0")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(.gray)
+                    }
+                    Spacer()
+                }
                 
                 // Accuracy meter
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String(format: "ACCURACY: %.0f%%", accuracy * 100))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("MATCH_PRECISION")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Text("\(Int(accuracy * 100))%")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(gradeColor)
+                    }
+                    
                     GeometryReader { geo in
                         ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color.white.opacity(0.1))
-                            RoundedRectangle(cornerRadius: 4)
+                            RoundedRectangle(cornerRadius: 3)
+                                .fill(Color.white.opacity(0.08))
+                            RoundedRectangle(cornerRadius: 3)
                                 .fill(gradeColor)
                                 .frame(width: geo.size.width * accuracy)
+                                .shadow(color: gradeColor.opacity(0.5), radius: 6)
                         }
                     }
-                    .frame(height: 8)
+                    .frame(height: 6)
                 }
-                .padding(.horizontal, 30)
                 
-                HStack(spacing: 16) {
+                // Action Buttons
+                HStack(spacing: 12) {
                     Button(action: onRetry) {
-                        Label("RETRY", systemImage: "arrow.counterclockwise")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
-                            .foregroundColor(.black)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 11)
-                            .background(Color.gray)
+                        Text("RE-CALIBRATE")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.8))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(Color.white.opacity(0.1))
                             .cornerRadius(10)
                     }
                     Button(action: onNext) {
-                        Label("NEXT LEVEL", systemImage: "chevron.right.2")
-                            .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        Text("CONTINUE_EXP")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
                             .foregroundColor(.black)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 11)
-                            .background(neonCyan)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(gradeColor)
                             .cornerRadius(10)
+                            .shadow(color: gradeColor.opacity(0.3), radius: 8)
                     }
                 }
             }
+            .padding(24)
+            .background(
+                ZStack {
+                    Color.black.opacity(0.9)
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(gradeColor.opacity(0.3), lineWidth: 1)
+                }
+            )
+            .cornerRadius(20)
+            .padding(.horizontal, 30)
         }
-        .padding(20)
-        .background(.ultraThinMaterial)
-        .cornerRadius(20)
-        .shadow(color: neonCyan.opacity(0.2), radius: 20)
-        .padding(.horizontal, 30)
     }
 }
-@available(iOS 16.0, *)
 struct ScientificSlider: View {
     let label: String
     @Binding var value: Double
@@ -274,7 +349,6 @@ struct ScientificSlider: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct HUDDataRow: View {
     let label: String
     let value: String
@@ -293,7 +367,6 @@ struct HUDDataRow: View {
         .frame(width: 100)
     }
 }
-@available(iOS 16.0, *)
 struct ConfettiBurstView: View {
     let color: Color
     @State private var particles: [Particle] = []
@@ -335,15 +408,21 @@ struct ConfettiBurstView: View {
             ))
         }
         
-        Timer.scheduledTimer(withTimeInterval: 0.02, repeats: true) { timer in
-            for i in particles.indices {
-                particles[i].x += particles[i].speedX
-                particles[i].y += particles[i].speedY
-                particles[i].speedY += 0.5 // gravity
-                particles[i].opacity -= 0.015
-            }
-            if particles.allSatisfy({ $0.opacity <= 0 }) {
-                timer.invalidate()
+        Task { @MainActor in
+            while true {
+                try? await Task.sleep(nanoseconds: 20_000_000) // 0.02s
+                guard !Task.isCancelled else { break }
+                
+                for i in particles.indices {
+                    particles[i].x += particles[i].speedX
+                    particles[i].y += particles[i].speedY
+                    particles[i].speedY += 0.5 // gravity
+                    particles[i].opacity -= 0.015
+                }
+                
+                if particles.allSatisfy({ $0.opacity <= 0 }) {
+                    break
+                }
             }
         }
     }

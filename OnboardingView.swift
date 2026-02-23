@@ -3,7 +3,6 @@ import SwiftUI
 import AudioToolbox
 import AVFoundation
 
-@available(iOS 16.0, *)
 struct OnboardingView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var currentPage = 0
@@ -267,7 +266,8 @@ struct OnboardingView: View {
         speakGreeting()
         
         // Auto-advance to permissions page after 2 seconds
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             showGreeting = false
             withAnimation(.easeInOut(duration: 0.5)) {
                 currentPage = 3
@@ -291,7 +291,6 @@ struct OnboardingView: View {
 
 // MARK: - Animated LiDAR Scan Icon
 
-@available(iOS 16.0, *)
 struct LiDARScanIcon: View {
     let color: Color
     @State private var isAnimating = false
@@ -335,7 +334,6 @@ struct LiDARScanIcon: View {
 
 // MARK: - Permission Row
 
-@available(iOS 16.0, *)
 struct PermissionRow: View {
     let text: String
     

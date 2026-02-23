@@ -8,7 +8,6 @@ import UIKit
 /// The core AR view that renders the Blueprint-style diagnostic overlay.
 /// Features: LiDAR mesh wireframe, 3D grid, velocity/acceleration vectors with arrowheads,
 /// trajectory ghosting with opacity fade, and neon bloom glow effect.
-@available(iOS 16.0, *)
 class KineprintARView: UIView, ARSCNViewDelegate, ARSessionDelegate {
     var arSCNView: ARSCNView!
     var arSession: ARSession!

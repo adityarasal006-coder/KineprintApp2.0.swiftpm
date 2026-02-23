@@ -1,7 +1,6 @@
 #if os(iOS)
 import SwiftUI
 
-@available(iOS 16.0, *)
 struct ResearchLibraryView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @Environment(\.dismiss) var dismiss
@@ -122,7 +121,6 @@ struct ResearchLibraryView: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct EmptyResearchState: View {
     let icon: String
     let title: String
@@ -147,7 +145,6 @@ struct EmptyResearchState: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct ResearchEntryCard: View {
     let entry: ResearchEntry
     var onClone: () -> Void
@@ -215,7 +212,6 @@ struct ResearchEntryCard: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct DetailBadge: View {
     let label: String
     let value: String
@@ -239,7 +235,6 @@ struct DetailBadge: View {
 
 // MARK: - Paper View
 
-@available(iOS 16.0, *)
 struct PaperEntryCard: View {
     let paper: ResearchPaper
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
@@ -282,7 +277,6 @@ struct PaperEntryCard: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct PaperComposerView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @Environment(\.dismiss) var dismiss

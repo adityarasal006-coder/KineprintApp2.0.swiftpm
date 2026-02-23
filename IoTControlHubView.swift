@@ -1,14 +1,14 @@
-#if os(iOS)
 import SwiftUI
 import CoreBluetooth
 
-@available(iOS 16.0, *)
 struct IoTControlHubView: View {
     @StateObject private var bluetoothManager = BluetoothManager()
     @State private var showingConnectionSheet = false
     @State private var selectedDevice: IoTDevice?
     @State private var activeTab: IoTTab = .devices
     @State private var showSettings = false
+    @State private var isInterfacing = false
+    @State private var selectedInterfacingDevice: IoTDevice?
     
     enum IoTTab: String {
         case devices = "DEVICES"
@@ -23,19 +23,9 @@ struct IoTControlHubView: View {
                 // Background: Blueprint Grid
                 Color.black.ignoresSafeArea()
                 
-                GeometryReader { geo in
-                    ZStack {
-                        // Moving grid lines for flair
-                        ForEach(0..<10) { i in
-                            Path { path in
-                                path.move(to: CGPoint(x: 0, y: geo.size.height / 10 * CGFloat(i)))
-                                path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 10 * CGFloat(i)))
-                            }
-                            .stroke(neonCyan.opacity(0.1), lineWidth: 0.5)
-                        }
-                    }
-                }
-                .ignoresSafeArea()
+                EngineeringGridBackground(cyanColor: neonCyan)
+                    .opacity(0.15)
+                    .ignoresSafeArea()
                 
                 VStack {
                     // Header
@@ -61,22 +51,50 @@ struct IoTControlHubView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
                     
-                    // Tab Picker
-                    Picker("IoT Section", selection: $activeTab) {
-                        Text(IoTTab.devices.rawValue).tag(IoTTab.devices)
-                        Text(IoTTab.components.rawValue).tag(IoTTab.components)
-                        Text(IoTTab.training.rawValue).tag(IoTTab.training)
+                    // Custom Tab Bar
+                    HStack(spacing: 0) {
+                        ForEach([IoTTab.devices, .components, .training], id: \.self) { tab in
+                            Button(action: { 
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                    activeTab = tab 
+                                }
+                            }) {
+                                VStack(spacing: 6) {
+                                    Text(tab.rawValue)
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        .foregroundColor(activeTab == tab ? neonCyan : .gray.opacity(0.6))
+                                    
+                                    Rectangle()
+                                        .fill(activeTab == tab ? neonCyan : Color.clear)
+                                        .frame(height: 2)
+                                        .shadow(color: activeTab == tab ? neonCyan.opacity(0.5) : .clear, radius: 4)
+                                }
+                                .frame(maxWidth: .infinity)
+                            }
+                        }
                     }
-                    .pickerStyle(SegmentedPickerStyle())
                     .padding(.horizontal, 16)
+                    .padding(.top, 10)
+                    
+                    // Hub Status Monitor
+                    HStack(spacing: 20) {
+                        HubHUDItem(icon: "antenna.radiowaves.left.and.right", label: "LINK", value: bluetoothManager.isConnected ? "CONNECTED" : "ACTIVE", color: bluetoothManager.isConnected ? .green : neonCyan)
+                        HubHUDItem(icon: "bolt.fill", label: "PWR", value: "98%", color: .green)
+                        HubHUDItem(icon: "cpu", label: "PROC", value: "LOAD: 12%", color: neonCyan)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 12)
                     
                     if activeTab == .devices {
                         // Device Discovery Panel
-                        DeviceDiscoveryPanel(bluetoothManager: bluetoothManager, selectedDevice: $selectedDevice)
+                        DeviceDiscoveryPanel(bluetoothManager: bluetoothManager, 
+                                             selectedDevice: $selectedDevice,
+                                             isInterfacing: $isInterfacing,
+                                             interfacingDevice: $selectedInterfacingDevice)
                         
                         // Robot Controls Section
                         if let selectedDevice = selectedDevice {
-                            RobotControlPanel(device: selectedDevice)
+                            RobotControlPanel(device: selectedDevice, bluetoothManager: bluetoothManager)
                         }
                     } else if activeTab == .components {
                         IoTComponentLibraryView()
@@ -87,6 +105,14 @@ struct IoTControlHubView: View {
                     Spacer()
                 }
                 .padding(.top, 10)
+                
+                // Full Screen Hardware Interfacing Animation
+                if isInterfacing, let device = selectedInterfacingDevice {
+                    HardwareInterfacingView(device: device, isPresented: $isInterfacing) {
+                        selectedDevice = device
+                    }
+                    .transition(.opacity)
+                }
             }
         .preferredColorScheme(.dark)
         .sheet(isPresented: $showSettings) {
@@ -97,7 +123,6 @@ struct IoTControlHubView: View {
 
 // MARK: - IoT Settings Sheet
 
-@available(iOS 16.0, *)
 struct IoTSettingsSheet: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @Environment(\.dismiss) var dismiss
@@ -213,6 +238,21 @@ struct IoTSettingsSheet: View {
                                     }
                                 }
                                 .toggleStyle(SwitchToggleStyle(tint: neonCyan))
+                                
+                                Divider().background(neonCyan.opacity(0.1))
+                                
+                                Toggle(isOn: $bluetoothManager.useSimulatedDevices) {
+                                    HStack {
+                                        Text("Simulation Mode")
+                                            .font(.system(size: 13, weight: .medium, design: .monospaced))
+                                            .foregroundColor(.white)
+                                        Spacer()
+                                        Text(bluetoothManager.useSimulatedDevices ? "ON" : "OFF")
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(bluetoothManager.useSimulatedDevices ? neonCyan : .gray)
+                                    }
+                                }
+                                .toggleStyle(SwitchToggleStyle(tint: neonCyan))
                             }
                         }
                         
@@ -297,10 +337,45 @@ struct IoTSettingsSheet: View {
     }
 }
 
-@available(iOS 16.0, *)
+struct HubHUDItem: View {
+    let icon: String
+    let label: String
+    let value: String
+    let color: Color
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 10))
+                .foregroundColor(color)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                    .foregroundColor(.gray)
+                Text(value)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(color)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.white.opacity(0.03))
+        .cornerRadius(6)
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(color.opacity(0.1), lineWidth: 0.5))
+    }
+}
+
 struct DeviceDiscoveryPanel: View {
     @ObservedObject var bluetoothManager: BluetoothManager
     @Binding var selectedDevice: IoTDevice?
+    @Binding var isInterfacing: Bool
+    @Binding var interfacingDevice: IoTDevice?
+    @State private var radarRotation: Double = 0
+    @State private var scanningLogs: [String] = []
+    @State private var spectrumHeights: [CGFloat] = Array(repeating: 5, count: 18)
+    @State private var dragOffset: CGFloat = 0
+    @State private var buttonPulse: Bool = false
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
@@ -322,17 +397,196 @@ struct DeviceDiscoveryPanel: View {
             }
             .padding(.horizontal, 16)
             
+            if bluetoothManager.isScanning {
+                VStack(spacing: 20) {
+                    HStack(alignment: .top, spacing: 20) {
+                        // Radar Animation
+                        ZStack {
+                            Circle()
+                                .stroke(neonCyan.opacity(0.1), lineWidth: 1)
+                                .frame(width: 140, height: 140)
+                            
+                            // Pulse Ring
+                            Circle()
+                                .stroke(neonCyan.opacity(0.2), lineWidth: 1)
+                                .frame(width: 140, height: 140)
+                                .scaleEffect(radarRotation > 0 ? 1.2 : 1.0)
+                                .opacity(radarRotation > 0 ? 0 : 1.0)
+                            
+                            // Radar Sweep
+                            Circle()
+                                .trim(from: 0, to: 0.15)
+                                .stroke(
+                                    AngularGradient(
+                                        gradient: Gradient(colors: [.clear, neonCyan]),
+                                        center: .center,
+                                        startAngle: .degrees(0),
+                                        endAngle: .degrees(360)
+                                    ),
+                                    style: StrokeStyle(lineWidth: 15, lineCap: .butt)
+                                )
+                                .frame(width: 120, height: 120)
+                                .rotationEffect(.degrees(radarRotation))
+                            
+                            if #available(iOS 17.0, *) {
+                                Image(systemName: "antenna.radiowaves.left.and.right")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(neonCyan)
+                                    .symbolEffect(.pulse)
+                            } else {
+                                Image(systemName: "antenna.radiowaves.left.and.right")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(neonCyan)
+                            }
+                        }
+                        
+                        // Scanning Logs
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("SCANNING LOGS")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundColor(.gray)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(scanningLogs, id: \.self) { log in
+                                    Text(log)
+                                        .font(.system(size: 8, design: .monospaced))
+                                        .foregroundColor(neonCyan.opacity(0.8))
+                                }
+                            }
+                            .frame(height: 80, alignment: .top)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .background(Color.black.opacity(0.3))
+                        .cornerRadius(8)
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(neonCyan.opacity(0.1), lineWidth: 0.5))
+                    }
+                    .padding(.horizontal, 16)
+                }
+                .transition(.opacity)
+                .onAppear {
+                    withAnimation(.linear(duration: 3).repeatForever(autoreverses: false)) {
+                        radarRotation = 360
+                    }
+                    startSimulatingLogs()
+                }
+            }
+            
             // Device List
             ScrollView {
-                LazyVStack(spacing: 10) {
-                    ForEach(bluetoothManager.discoveredDevices, id: \.id) { device in
-                        DeviceRowView(device: device, bluetoothManager: bluetoothManager) {
-                            selectedDevice = device
+                if bluetoothManager.discoveredDevices.isEmpty && !bluetoothManager.isScanning {
+                    VStack(spacing: 20) {
+                        // Environment Noise Visualizer (Isolated DANCING Bars)
+                        ZStack(alignment: .bottom) {
+                            HStack(alignment: .bottom, spacing: 3) {
+                                ForEach(0..<18) { i in
+                                    RoundedRectangle(cornerRadius: 1)
+                                        .fill(neonCyan.opacity(0.4))
+                                        .frame(width: 4, height: spectrumHeights[i])
+                                        .offset(y: sin(Double(i) + Double(dragOffset / 10)) * 3)
+                                }
+                            }
+                            .frame(height: 40, alignment: .bottom)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.bottom, 10)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture()
+                                .onChanged { value in
+                                    dragOffset = value.translation.width
+                                    for idx in 0..<18 {
+                                        spectrumHeights[idx] = CGFloat.random(in: 10...35)
+                                    }
+                                }
+                                .onEnded { _ in
+                                    withAnimation(.spring()) { dragOffset = 0 }
+                                }
+                        )
+                        .onAppear {
+                            // Only animate the heights, not the layout container
+                            withAnimation(.easeInOut(duration: 0.8).repeatForever()) {
+                                spectrumHeights = spectrumHeights.map { _ in CGFloat.random(in: 6...30) }
+                            }
+                        }
+                        
+                        // Mission Intel (CLEAR EXPLANATION FIRST)
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Image(systemName: "info.circle")
+                                    .foregroundColor(neonCyan)
+                                Text("MISSION INTEL")
+                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                    .foregroundColor(neonCyan)
+                            }
+                            
+                            Text("The Kineprint Hub is currently idle. Initialize a Deep Scan to detect structural IoT modules in your vicinity. Once detected, you can interface with hardware to extract engineering telemetry.")
+                                .font(.system(size: 10, design: .monospaced))
+                                .foregroundColor(.gray)
+                                .lineLimit(3)
+                        }
+                        .padding(12)
+                        .background(Color.white.opacity(0.03))
+                        .cornerRadius(8)
+                        .padding(.horizontal, 24)
+                        
+                        VStack(spacing: 12) {
+                            Image(systemName: "antenna.radiowaves.left.and.right.slash")
+                                .font(.system(size: 24))
+                                .foregroundColor(.gray.opacity(0.4))
+                            
+                            Text("NO LOCAL ASSETS DETECTED")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(.gray)
+                        }
+                        
+                        // Actionable Pulsing Button (STABLE BUT ACTIVE)
+                        Button(action: { 
+                            let impact = UIImpactFeedbackGenerator(style: .heavy)
+                            impact.impactOccurred()
+                            bluetoothManager.startScan() 
+                        }) {
+                            Text("INITIALIZE DEEP SCAN")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(.black)
+                                .padding(.horizontal, 30)
+                                .padding(.vertical, 12)
+                                .background(
+                                    ZStack {
+                                        neonCyan
+                                        Capsule()
+                                            .stroke(neonCyan, lineWidth: 2)
+                                            .scaleEffect(buttonPulse ? 1.2 : 1.0)
+                                            .opacity(buttonPulse ? 0 : 0.6)
+                                    }
+                                )
+                                .clipShape(Capsule())
+                                .shadow(color: neonCyan.opacity(0.5), radius: buttonPulse ? 12 : 6)
+                        }
+                        .buttonStyle(ActiveButtonStyle())
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
+                                buttonPulse = true
+                            }
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 30)
+                } else {
+                    LazyVStack(spacing: 10) {
+                        ForEach(bluetoothManager.discoveredDevices, id: \.id) { device in
+                            DeviceRowView(device: device, bluetoothManager: bluetoothManager) {
+                                interfacingDevice = device
+                                withAnimation {
+                                    isInterfacing = true
+                                }
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
             }
+            .frame(maxHeight: bluetoothManager.isScanning ? 240 : .infinity)
         }
         .padding(.vertical, 10)
         .background(
@@ -348,9 +602,33 @@ struct DeviceDiscoveryPanel: View {
         )
         .padding(.horizontal, 16)
     }
+    
+    private func startSimulatingLogs() {
+        let possibleLogs = [
+            "SCANNING_CORE_0x\(String(format: "%04X", Int.random(in: 0...65535)))",
+            "SIG_OVERRIDE_ENABLED",
+            "MAPPING_BLUETOOTH_MESH...",
+            "DECODING_HEX_PACKET_7F",
+            "FILTERING_STATIC_NOISE",
+            "EXTRACTING_DEVICE_UUID",
+            "VERIFYING_HARDWARE_INTEGRITY",
+            "READY_FOR_HANDSHAKE"
+        ]
+        
+        Task { @MainActor in
+            while bluetoothManager.isScanning {
+                try? await Task.sleep(nanoseconds: 800_000_000)
+                guard !Task.isCancelled && bluetoothManager.isScanning else { break }
+                
+                withAnimation {
+                    scanningLogs.insert("> " + (possibleLogs.randomElement() ?? ""), at: 0)
+                    if scanningLogs.count > 6 { scanningLogs.removeLast() }
+                }
+            }
+        }
+    }
 }
 
-@available(iOS 16.0, *)
 struct DeviceRowView: View {
     let device: IoTDevice
     @ObservedObject var bluetoothManager: BluetoothManager
@@ -359,91 +637,78 @@ struct DeviceRowView: View {
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
-        HStack {
-            // Device Icon
-            ZStack {
-                Circle()
-                    .fill(neonCyan.opacity(0.1))
-                    .frame(width: 40, height: 40)
-                
-                Image(systemName: device.icon)
-                    .foregroundColor(neonCyan)
-                    .font(.system(size: 18))
-            }
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(device.name)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                
-                Text(device.type.rawValue)
-                    .font(.system(size: 12, weight: .regular, design: .monospaced))
-                    .foregroundColor(.gray)
-            }
-            
-            Spacer()
-            
-            // Signal Strength
-            HStack(spacing: 2) {
-                ForEach(0..<5) { level in
+        Button(action: onTap) {
+            HStack(spacing: 0) {
+                // Device Icon Sidebar
+                ZStack {
                     Rectangle()
-                        .fill(level < device.signalStrength ? neonCyan : .gray.opacity(0.3))
-                        .frame(width: 3, height: CGFloat(level * 3 + 3))
+                        .fill(neonCyan.opacity(0.1))
+                        .frame(width: 45)
+                    
+                    Image(systemName: device.icon)
+                        .font(.system(size: 18))
+                        .foregroundColor(neonCyan)
                 }
-            }
-            .frame(width: 30)
-            
-            // Connect/Disconnect Button
-            Button(action: {
-                if device.connectionStatus == .connected {
-                    bluetoothManager.disconnectFromDevice(device)
-                } else {
-                    bluetoothManager.connectToDevice(device)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(device.name)
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        // Signal Strength HUD
+                        HStack(spacing: 2) {
+                            ForEach(0..<5) { idx in
+                                Rectangle()
+                                    .fill(idx < device.signalStrength ? neonCyan : Color.gray.opacity(0.3))
+                                    .frame(width: 3, height: CGFloat(3 + idx * 2))
+                            }
+                        }
+                    }
+                    
+                    Text(device.type.rawValue.uppercased())
+                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                        .foregroundColor(.gray)
+                    
+                    HStack(spacing: 15) {
+                        Label {
+                            Text(device.connectionStatus == .connected ? "ONLINE" : "READY")
+                                .font(.system(size: 8, design: .monospaced))
+                        } icon: {
+                            Circle().fill(device.connectionStatus == .connected ? Color.green : neonCyan.opacity(0.5))
+                                .frame(width: 6, height: 6)
+                        }
+                        .foregroundColor(device.connectionStatus == .connected ? .green : .gray)
+                        
+                        Text("UUID: \(device.id.uuidString.prefix(8))")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(.gray.opacity(0.6))
+                    }
                 }
-            }) {
-                Text(device.connectionStatus == .connected ? "DISCONNECT" : "CONNECT")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(device.connectionStatus == .connected ? .red : neonCyan)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        device.connectionStatus == .connected ?
-                            Color.red.opacity(0.1) : Color.black.opacity(0.4)
-                    )
-                    .cornerRadius(6)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 16)
+                
+                Spacer()
+                
+                // Connect Action Arrow
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(neonCyan.opacity(0.4))
+                    .padding(.trailing, 12)
             }
-            .buttonStyle(PlainButtonStyle())
-            
-            // Connection Status
-            Circle()
-                .fill(connectionColor)
-                .frame(width: 10, height: 10)
-                .padding(.leading, 8)
+            .background(Color.white.opacity(0.04))
+            .cornerRadius(10)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(neonCyan.opacity(0.1), lineWidth: 1))
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.black.opacity(0.4))
-        )
-        .onTapGesture {
-            onTap()
-        }
-    }
-    
-    private var connectionColor: Color {
-        switch device.connectionStatus {
-        case .connected: return .green
-        case .connecting: return .orange
-        case .disconnected: return .red
-        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 
-@available(iOS 16.0, *)
 struct RobotControlPanel: View {
     var device: IoTDevice
-    @StateObject private var bluetoothManager = BluetoothManager()
+    @ObservedObject var bluetoothManager: BluetoothManager
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
@@ -594,7 +859,6 @@ struct RobotControlPanel: View {
 
 // MARK: - IoT Device Models and Bluetooth Manager
 
-@available(iOS 16.0, *)
 enum DeviceType: String, CaseIterable {
     case esp32 = "ESP32"
     case arduino = "Arduino"
@@ -603,14 +867,12 @@ enum DeviceType: String, CaseIterable {
     case other = "Other"
 }
 
-@available(iOS 16.0, *)
 enum ConnectionStatus {
     case disconnected
     case connecting
     case connected
 }
 
-@available(iOS 16.0, *)
 enum RotationDirection {
     case clockwise
     case counterClockwise
@@ -620,10 +882,10 @@ enum IoTCommand {
     case setMotorSpeed(Float)
     case setServoAngle(Float)
     case setDirection(RotationDirection)
+    case toggleLED(Bool)
     case emergencyStop
 }
 
-@available(iOS 16.0, *)
 struct IoTDevice: Identifiable {
     let id = UUID()
     let name: String
@@ -637,19 +899,31 @@ struct IoTDevice: Identifiable {
     
     var icon: String {
         switch type {
-        case .esp32: return "chip"
-        case .arduino: return "circuitgroup"
-        case .raspberryPi: return "computerdesktop"
-        case .educationalRobot: return "figure.2.arms.open"
-        case .other: return "cpu"
+        case .esp32: return "cpu"
+        case .arduino: return "memorychip"
+        case .raspberryPi: return "terminal"
+        case .educationalRobot: return "robot"
+        case .other: return "sensor"
+        }
+    }
+
+    var imageName: String {
+        switch type {
+        case .esp32: return "esp32_component"
+        case .arduino: return "arduino_uno_component"
+        case .raspberryPi: return "raspberry_pi_component"
+        case .educationalRobot: return "robot_1"
+        case .other: return "esp32_component"
         }
     }
 }
 
-@available(iOS 16.0, *)
+@MainActor
 class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     @Published var discoveredDevices: [IoTDevice] = []
     @Published var isConnected = false
+    @Published var isScanning = false
+    @Published var useSimulatedDevices = true
     
     private var centralManager: CBCentralManager!
     private var discoveredPeripherals: [CBPeripheral: IoTDevice] = [:]
@@ -660,13 +934,45 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
     
     func startScan() {
-        guard centralManager.state == .poweredOn else { return }
+        // If simulated devices are enabled, allow the scan to "proceed" visually even if BT is off
+        if !useSimulatedDevices {
+            guard centralManager.state == .poweredOn else { return }
+        }
+        
+        isScanning = true
         discoveredPeripherals.removeAll()
+        
+        if useSimulatedDevices {
+            addSimulatedDevices()
+        }
+        
         centralManager.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+        
+        // Auto-stop scan after some time to simulate a completed discovery cycle
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            self.stopScan()
+        }
+    }
+    
+    private func addSimulatedDevices() {
+        let simulated = [
+            IoTDevice(name: "KINE-SCOUT-01", type: .educationalRobot, signalStrength: 5, connectionStatus: .disconnected),
+            IoTDevice(name: "LAB-CORE-BRAIN", type: .esp32, signalStrength: 4, connectionStatus: .disconnected),
+            IoTDevice(name: "ARDUINO-HV-DRIVE", type: .arduino, signalStrength: 3, connectionStatus: .disconnected),
+            IoTDevice(name: "PI-VISION-NODE", type: .raspberryPi, signalStrength: 2, connectionStatus: .disconnected)
+        ]
+        
+        for device in simulated {
+            if !discoveredDevices.contains(where: { $0.name == device.name }) {
+                discoveredDevices.append(device)
+            }
+        }
     }
     
     func stopScan() {
         centralManager.stopScan()
+        isScanning = false
     }
     
     func connectToDevice(_ device: IoTDevice) {
@@ -683,106 +989,124 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     
     // MARK: - CBCentralManagerDelegate
     
-    func centralManagerDidUpdateState(_ central: CBCentralManager) {
-        switch central.state {
-        case .poweredOn:
-            print("Bluetooth is powered on")
-            startScan()
-        case .poweredOff:
-            print("Bluetooth is powered off")
-        case .unauthorized:
-            print("Bluetooth is unauthorized")
-        case .unsupported:
-            print("Bluetooth is unsupported")
-        default:
-            print("Bluetooth state: \(central.state)")
+    nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        let state = central.state
+        Task { @MainActor in
+            switch state {
+            case .poweredOn:
+                print("Bluetooth is powered on")
+                self.startScan()
+            case .poweredOff:
+                print("Bluetooth is powered off")
+            case .unauthorized:
+                print("Bluetooth is unauthorized")
+            case .unsupported:
+                print("Bluetooth is unsupported")
+            default:
+                print("Bluetooth state: \(state)")
+            }
         }
     }
     
-    func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        let deviceType = determineDeviceType(from: advertisementData)
-        let signalBars = calculateSignalBars(from: RSSI)
-        
-        let iotDevice = IoTDevice(
-            name: peripheral.name ?? "Unknown Device",
-            type: deviceType,
-            signalStrength: signalBars,
-            connectionStatus: .disconnected,
-            motorSpeed: 0,
-            servoAngle: 90,
-            direction: .clockwise
-        )
-        
-        discoveredPeripherals[peripheral] = iotDevice
-        self.discoveredDevices = Array(self.discoveredPeripherals.values)
-    }
-    
-    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
-        if let device = discoveredPeripherals[peripheral] {
-            var updatedDevice = device
-            updatedDevice.connectionStatus = .connected
-            discoveredPeripherals[peripheral] = updatedDevice
-            self.discoveredDevices = Array(self.discoveredPeripherals.values)
+    nonisolated func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String : Any], rssi RSSI: NSNumber) {
+        Task { @MainActor in
+            let deviceType = self.determineDeviceType(from: advertisementData)
+            let signalBars = self.calculateSignalBars(from: RSSI)
             
-            peripheral.delegate = self
-            peripheral.discoverServices(nil)
-        }
-    }
-    
-    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
-        if let device = discoveredPeripherals[peripheral] {
-            var updatedDevice = device
-            updatedDevice.connectionStatus = .disconnected
-            discoveredPeripherals[peripheral] = updatedDevice
+            let iotDevice = IoTDevice(
+                name: peripheral.name ?? "Unknown Device",
+                type: deviceType,
+                signalStrength: signalBars,
+                connectionStatus: .disconnected,
+                motorSpeed: 0,
+                servoAngle: 90,
+                direction: .clockwise
+            )
+            
+            self.discoveredPeripherals[peripheral] = iotDevice
             self.discoveredDevices = Array(self.discoveredPeripherals.values)
         }
     }
     
-    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
-        if let device = discoveredPeripherals[peripheral] {
-            var updatedDevice = device
-            updatedDevice.connectionStatus = .disconnected
-            discoveredPeripherals[peripheral] = updatedDevice
-            self.discoveredDevices = Array(self.discoveredPeripherals.values)
+    nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        Task { @MainActor in
+            if let device = self.discoveredPeripherals[peripheral] {
+                var updatedDevice = device
+                updatedDevice.connectionStatus = .connected
+                self.discoveredPeripherals[peripheral] = updatedDevice
+                self.discoveredDevices = Array(self.discoveredPeripherals.values)
+                
+                peripheral.delegate = self
+                peripheral.discoverServices(nil)
+            }
+        }
+    }
+    
+    nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        Task { @MainActor in
+            if let device = self.discoveredPeripherals[peripheral] {
+                var updatedDevice = device
+                updatedDevice.connectionStatus = .disconnected
+                self.discoveredPeripherals[peripheral] = updatedDevice
+                self.discoveredDevices = Array(self.discoveredPeripherals.values)
+            }
+        }
+    }
+    
+    nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        Task { @MainActor in
+            if let device = self.discoveredPeripherals[peripheral] {
+                var updatedDevice = device
+                updatedDevice.connectionStatus = .disconnected
+                self.discoveredPeripherals[peripheral] = updatedDevice
+                self.discoveredDevices = Array(self.discoveredPeripherals.values)
+            }
         }
     }
     
     // MARK: - CBPeripheralDelegate
     
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+    nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         if let error = error {
             print("Error discovering services: \(error.localizedDescription)")
             return
         }
-        guard let services = peripheral.services else { return }
-        for service in services {
-            peripheral.discoverCharacteristics(nil, for: service)
+        Task { @MainActor in
+            guard let services = peripheral.services else { return }
+            for service in services {
+                peripheral.discoverCharacteristics(nil, for: service)
+            }
         }
     }
     
-    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+    nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         if let error = error {
             print("Error discovering characteristics: \(error.localizedDescription)")
             return
         }
-        guard let characteristics = service.characteristics else { return }
-        for characteristic in characteristics {
-            if characteristic.properties.contains(.read) {
-                peripheral.readValue(for: characteristic)
-            }
-            if characteristic.properties.contains(.notify) {
-                peripheral.setNotifyValue(true, for: characteristic)
+        Task { @MainActor in
+            guard let characteristics = service.characteristics else { return }
+            for characteristic in characteristics {
+                if characteristic.properties.contains(.read) {
+                    peripheral.readValue(for: characteristic)
+                }
+                if characteristic.properties.contains(.notify) {
+                    peripheral.setNotifyValue(true, for: characteristic)
+                }
             }
         }
     }
     
-    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+    nonisolated func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         if let error = error {
             print("Error reading characteristic: \(error.localizedDescription)")
             return
         }
-        guard let value = characteristic.value else { return }
-        processReceivedData(value, for: characteristic)
+        let value = characteristic.value
+        Task { @MainActor in
+            guard let value = value else { return }
+            self.processReceivedData(value, for: characteristic)
+        }
     }
     
     // MARK: - Helper Methods
@@ -816,12 +1140,32 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
     }
     
     func sendCommand(_ command: IoTCommand, to device: IoTDevice) {
-        if let peripheral = discoveredPeripherals.first(where: { pair in pair.value.id == device.id })?.key,
-           peripheral.state == .connected {
-            let commandData = encodeCommand(command)
-            if let service = peripheral.services?.first,
-               let characteristic = service.characteristics?.first(where: { char in char.properties.contains(.write) }) {
-                peripheral.writeValue(commandData, for: characteristic, type: .withResponse)
+        // Find the peripheral and update its state
+        if let pair = discoveredPeripherals.first(where: { $0.value.id == device.id }) {
+            let peripheral = pair.key
+            var updatedDevice = pair.value
+            
+            // Apply command to local state
+            switch command {
+            case .setMotorSpeed(let speed): updatedDevice.motorSpeed = speed
+            case .setServoAngle(let angle): updatedDevice.servoAngle = angle
+            case .setDirection(let dir): updatedDevice.direction = dir
+            case .toggleLED(let on): updatedDevice.sensorTelemetry["led"] = on ? 1 : 0
+            case .emergencyStop: updatedDevice.motorSpeed = 0
+            }
+            
+            discoveredPeripherals[peripheral] = updatedDevice
+            discoveredDevices = Array(discoveredPeripherals.values)
+            
+            if peripheral.state == .connected {
+                let commandData = encodeCommand(command)
+                if let service = peripheral.services?.first,
+                   let characteristic = service.characteristics?.first(where: { char in char.properties.contains(.write) }) {
+                    peripheral.writeValue(commandData, for: characteristic, type: .withResponse)
+                }
+            } else if useSimulatedDevices {
+                // In simulation mode, we just update the local state as if it succeeded
+                print("Simulated command sent: \(command)")
             }
         }
     }
@@ -835,38 +1179,80 @@ class BluetoothManager: NSObject, ObservableObject, CBCentralManagerDelegate, CB
         case .setDirection(let direction):
             let directionByte: UInt8 = direction == .clockwise ? 0x00 : 0x01
             return Data([0x03, directionByte])
+        case .toggleLED(let on):
+            return Data([0x04, on ? 0x01 : 0x00])
         case .emergencyStop:
             return Data([0xFF])
         }
     }
 }
 
-@available(iOS 16.0, *)
 struct IoTComponentLibraryView: View {
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     @State private var selectedComponent: IoTComponent?
+    @State private var searchTerm: String = ""
+
+    var filteredComponents: [IoTComponent] {
+        if searchTerm.isEmpty {
+            return IoTComponentsDatabase.shared.components
+        } else {
+            return IoTComponentsDatabase.shared.components.filter { 
+                $0.name.localizedCaseInsensitiveContains(searchTerm) || 
+                $0.category.rawValue.localizedCaseInsensitiveContains(searchTerm) ||
+                $0.description.localizedCaseInsensitiveContains(searchTerm)
+            }
+        }
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                ForEach(ComponentCategory.allCases, id: \.self) { category in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(category.rawValue.uppercased())
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(.gray)
-                            .padding(.horizontal, 16)
-                        
+        VStack(spacing: 0) {
+            // Search Bar
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundColor(neonCyan.opacity(0.6))
+                TextField("", text: $searchTerm, prompt: Text("SEARCH COMPONENT DATABASE").foregroundColor(.gray.opacity(0.5)))
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white)
+            }
+            .padding(12)
+            .background(Color.white.opacity(0.05))
+            .cornerRadius(10)
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(neonCyan.opacity(0.15), lineWidth: 1))
+            .padding(.horizontal, 16)
+            .padding(.top, 10)
+            
+            ScrollView {
+                VStack(spacing: 16) {
+                    if searchTerm.isEmpty {
+                        ForEach(ComponentCategory.allCases, id: \.self) { category in
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(category.rawValue.uppercased())
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.gray)
+                                    .padding(.horizontal, 16)
+                                
+                                LazyVStack(spacing: 12) {
+                                    ForEach(IoTComponentsDatabase.shared.getComponents(by: category)) { comp in
+                                        ComponentCardView(component: comp) {
+                                            selectedComponent = comp
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
                         LazyVStack(spacing: 12) {
-                            ForEach(IoTComponentsDatabase.shared.getComponents(by: category)) { comp in
+                            ForEach(filteredComponents) { comp in
                                 ComponentCardView(component: comp) {
                                     selectedComponent = comp
                                 }
                             }
                         }
+                        .padding(.top, 10)
                     }
                 }
+                .padding(.vertical, 10)
             }
-            .padding(.vertical, 10)
         }
         .sheet(item: $selectedComponent) { comp in
             ComponentDetailView(component: comp)
@@ -874,7 +1260,6 @@ struct IoTComponentLibraryView: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct ComponentCardView: View {
     let component: IoTComponent
     let onTap: () -> Void
@@ -893,25 +1278,19 @@ struct ComponentCardView: View {
                             .stroke(neonCyan.opacity(0.3), lineWidth: 1)
                             .frame(width: 52, height: 52)
                         
-                        if let path = Bundle.main.path(forResource: component.componentImageName, ofType: "png"),
-                           let uiImage = UIImage(contentsOfFile: path) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 36, height: 36)
-                                .clipShape(Circle())
-                        } else if let uiImage = UIImage(named: component.componentImageName) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 36, height: 36)
-                                .clipShape(Circle())
-                        } else {
-                            Image(systemName: component.iconName)
-                                .foregroundColor(neonCyan)
-                                .font(.system(size: 22))
-                                .shadow(color: neonCyan.opacity(0.4), radius: 6)
-                        }
+                        Image(component.componentImageName)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 40, height: 40)
+                            .background(Color.black)
+                            .compositingGroup()
+                            .luminanceToAlpha()
+                            .mask(
+                                Image(component.componentImageName)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(width: 40, height: 40)
+                            )
                     }
                     
                     VStack(alignment: .leading, spacing: 4) {
@@ -958,7 +1337,6 @@ struct ComponentCardView: View {
 
 // MARK: - Component Detail View
 
-@available(iOS 16.0, *)
 struct ComponentDetailView: View {
     let component: IoTComponent
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
@@ -1027,33 +1405,15 @@ struct ComponentDetailView: View {
                             .stroke(neonCyan.opacity(0.6), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                             .frame(width: 260, height: 260)
                             
-                            // Core Geometry (Image)
-                            if let path = Bundle.main.path(forResource: component.componentImageName, ofType: "png"),
-                               let uiImage = UIImage(contentsOfFile: path) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 140, height: 140)
-                                    .clipShape(Circle())
-                                    .colorMultiply(neonCyan) // Holographic effect
-                                    .opacity(textOpacity)
-                                    .shadow(color: neonCyan, radius: 20)
-                            } else if let uiImage = UIImage(named: component.componentImageName) {
-                                Image(uiImage: uiImage)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(width: 140, height: 140)
-                                    .clipShape(Circle())
-                                    .colorMultiply(neonCyan)
-                                    .opacity(textOpacity)
-                                    .shadow(color: neonCyan, radius: 20)
-                            } else {
-                                Image(systemName: component.iconName)
-                                    .font(.system(size: 60))
-                                    .foregroundColor(neonCyan)
-                                    .opacity(textOpacity)
-                                    .shadow(color: neonCyan, radius: 20)
-                            }
+                            // Core Component Image
+                            Image(component.componentImageName)
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 140, height: 140)
+                                .background(Color.black)
+                                .clipShape(Circle())
+                                .opacity(textOpacity)
+                                .shadow(color: neonCyan, radius: 20)
                             
                             // Data Nodes Bridging Out
                             if textOpacity > 0.5 {
@@ -1103,7 +1463,8 @@ struct ComponentDetailView: View {
             withAnimation(.easeInOut(duration: 1.5)) {
                 lineProgress = 1.0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                     textOpacity = 1.0
                 }
@@ -1112,7 +1473,6 @@ struct ComponentDetailView: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct BlueprintPanel: View {
     let title: String
     let content: String
@@ -1140,7 +1500,6 @@ struct BlueprintPanel: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct DetailSection<Content: View>: View {
     let title: String
     let icon: String
@@ -1173,7 +1532,6 @@ struct DetailSection<Content: View>: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct FlowLayout<Item: Hashable, Content: View>: View {
     let items: [Item]
     let content: (Item) -> Content
@@ -1210,4 +1568,801 @@ struct FlowLayout<Item: Hashable, Content: View>: View {
         return rows
     }
 }
-#endif
+
+struct ActiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+// MARK: - Hardware Interfacing Animation
+struct HardwareInterfacingView: View {
+    let device: IoTDevice
+    @Binding var isPresented: Bool
+    var onComplete: () -> Void
+    
+    @State private var phase: Int = 1 // Start immediately at phase 1
+    @State private var popups: [InterfacingPopup] = []
+    @State private var dataStreams: [DataStreamPacket] = []
+    @State private var showHardware: Bool = false
+    @State private var instructionIndex: Int = 0
+    @State private var backgroundOpacity: Double = 0
+    
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            // Background Data Attack (CROWDY)
+            ZStack {
+                ForEach(dataStreams) { packet in
+                    Text(packet.content)
+                        .font(.system(size: packet.size, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan.opacity(packet.opacity))
+                        .position(packet.position)
+                        .onAppear {
+                            withAnimation(.linear(duration: packet.duration)) {
+                                dataStreams[dataStreams.firstIndex(where: { $0.id == packet.id })!].position.y += 1000
+                            }
+                        }
+                }
+            }
+            .opacity(backgroundOpacity)
+            
+            // Phase 1: Thrown windows/popups
+            ForEach(popups) { popup in
+                InterfacingPopupView(popup: popup)
+            }
+            
+            // Phase 2: Actual Hardware Component Image
+            if showHardware {
+               VStack(spacing: 25) {
+                   ZStack {
+                       // Scanning Rings
+                       ForEach(0..<3) { i in
+                           Circle()
+                               .stroke(neonCyan.opacity(0.2), lineWidth: 1)
+                               .frame(width: CGFloat(220 + i * 40))
+                               .scaleEffect(phase == 2 ? 1.1 : 0.8)
+                       }
+                       
+                       // REAL COMPONENT IMAGE
+                       Image(device.imageName)
+                           .resizable()
+                           .aspectRatio(contentMode: .fit)
+                           .frame(width: 180, height: 180)
+                           .background(Color.black)
+                           .clipShape(RoundedRectangle(cornerRadius: 16))
+                           .shadow(color: neonCyan.opacity(0.6), radius: 30)
+                       
+                       // Holographic Scanner Line
+                       Rectangle()
+                           .fill(neonCyan.opacity(0.4))
+                           .frame(width: 240, height: 2)
+                           .offset(y: phase == 2 ? 100 : -100)
+                           .animation(.linear(duration: 2).repeatForever(autoreverses: true), value: phase)
+                   }
+                   .padding(.top, 40)
+                   
+                   Text("SYNCING HARDWARE: \(device.name)")
+                       .font(.system(size: 16, weight: .bold, design: .monospaced))
+                       .foregroundColor(.white)
+                       .tracking(2)
+                   
+                   // Connection Steps
+                   VStack(alignment: .leading, spacing: 12) {
+                       ForEach(0..<instructions.count, id: \.self) { idx in
+                           HStack(spacing: 12) {
+                               Rectangle()
+                                   .fill(idx <= instructionIndex ? neonCyan : Color.gray.opacity(0.2))
+                                   .frame(width: 4, height: 25)
+                               
+                               VStack(alignment: .leading, spacing: 2) {
+                                   Text("STEP 0\(idx + 1)")
+                                       .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                       .foregroundColor(idx <= instructionIndex ? neonCyan : .gray)
+                                   Text(instructions[idx])
+                                       .font(.system(size: 11, design: .monospaced))
+                                       .foregroundColor(idx <= instructionIndex ? .white : .gray.opacity(0.5))
+                               }
+                               
+                               Spacer()
+                               
+                               if idx <= instructionIndex {
+                                   Image(systemName: "bolt.fill")
+                                       .foregroundColor(neonCyan)
+                                       .font(.system(size: 12))
+                               }
+                           }
+                           .padding(.vertical, 4)
+                           .opacity(idx <= instructionIndex ? 1 : 0.3)
+                       }
+                   }
+                   .padding(15)
+                   .background(Color.white.opacity(0.03))
+                   .cornerRadius(10)
+                   .padding(.horizontal, 25)
+                   
+                   if instructionIndex == instructions.count - 1 {
+                       Button(action: {
+                           onComplete()
+                           isPresented = false
+                       }) {
+                           HStack {
+                               Image(systemName: "checkmark.shield.fill")
+                               Text("INITIALIZE LINK")
+                           }
+                           .font(.system(size: 13, weight: .bold, design: .monospaced))
+                           .foregroundColor(.black)
+                           .padding(.horizontal, 35)
+                           .padding(.vertical, 14)
+                           .background(neonCyan)
+                           .cornerRadius(8)
+                       }
+                       .padding(.bottom, 20)
+                   }
+               }
+               .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+            }
+        }
+        .onAppear {
+            startHeavyAnimation()
+        }
+    }
+    
+    private var instructions: [String] {
+        switch device.type {
+        case .educationalRobot:
+            return ["CALIBRATE CHASSIS", "ARM POWER MODULE", "ENABLE BT_MESH", "SYNC HANDSHAKE"]
+        case .esp32, .arduino:
+            return ["DETECT USB_BUS", "OPEN UART_SERIAL", "UPLOAD FIRMWARE", "INITIALIZE GPIO"]
+        default:
+            return ["VERIFY HARDWARE", "LOAD DRIVERS", "ESTABLISH LINK", "READY STATUS"]
+        }
+    }
+    
+    private func startHeavyAnimation() {
+        withAnimation(.easeIn(duration: 0.5)) {
+            backgroundOpacity = 1.0
+        }
+        
+        // Spawn Background Data Stream (CROWDY)
+        Task { @MainActor in
+            while true {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                guard !Task.isCancelled else { break }
+                if phase == 2 && instructionIndex == instructions.count - 1 { break }
+                
+                let packet = DataStreamPacket(
+                    content: ["0", "1", "<>", "SYNC", "HEX", "DATA", "X86", "ARM"].randomElement()!,
+                    position: CGPoint(x: CGFloat.random(in: 0...400), y: -50),
+                    size: CGFloat.random(in: 10...40),
+                    opacity: Double.random(in: 0.05...0.2),
+                    duration: Double.random(in: 2...5)
+                )
+                dataStreams.append(packet)
+                if dataStreams.count > 50 { dataStreams.removeFirst() }
+            }
+        }
+        
+        // Throw Windows Immediately
+        let screenTitles = ["KERNEL_X01", "SYSCALL_EXT", "DUMP_0xFF", "SIGNAL_AN", "MESH_MAP", "PROXY_SET", "GATEWAY"]
+        Task { @MainActor in
+            for i in 0..<screenTitles.count {
+                try? await Task.sleep(nanoseconds: 150_000_000) // 0.15s
+                let newPopup = InterfacingPopup(
+                    title: screenTitles[i],
+                    offset: CGSize(width: CGFloat.random(in: -120...120), height: CGFloat.random(in: -250...250))
+                )
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+                    popups.append(newPopup)
+                    let impact = UIImpactFeedbackGenerator(style: .medium)
+                    impact.impactOccurred()
+                }
+            }
+            
+            // Final Transition to Image
+            try? await Task.sleep(nanoseconds: 1_450_000_000) // Adjust to reach 2.5s total approx
+            withAnimation(.spring()) {
+                popups.removeAll()
+                showHardware = true
+                phase = 2
+            }
+            startInstructionCycle()
+        }
+    }
+    
+    private func startInstructionCycle() {
+        Task { @MainActor in
+            for i in 1..<instructions.count {
+                try? await Task.sleep(nanoseconds: 1_200_000_000) // 1.2s
+                withAnimation { instructionIndex = i }
+                let impact = UIImpactFeedbackGenerator(style: .medium)
+                impact.impactOccurred()
+            }
+        }
+    }
+}
+
+struct DataStreamPacket: Identifiable {
+    let id = UUID()
+    let content: String
+    var position: CGPoint
+    let size: CGFloat
+    let opacity: Double
+    let duration: Double
+}
+
+struct InterfacingPopup: Identifiable {
+    let id = UUID()
+    let title: String
+    let offset: CGSize
+}
+
+struct InterfacingPopupView: View {
+    let popup: InterfacingPopup
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(popup.title)
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(neonCyan)
+                Spacer()
+                Circle().fill(neonCyan).frame(width: 5, height: 5)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(neonCyan.opacity(0.2))
+            
+            Rectangle()
+                .fill(Color.black.opacity(0.9))
+                .frame(height: 70)
+                .overlay(
+                    VStack(alignment: .leading, spacing: 3) {
+                        ForEach(0..<5) { _ in
+                            Capsule()
+                                .fill(neonCyan.opacity(0.3))
+                                .frame(width: CGFloat.random(in: 20...110), height: 3)
+                        }
+                    }
+                    .padding(10)
+                )
+        }
+        .frame(width: 140)
+        .cornerRadius(6)
+        .overlay(RoundedRectangle(cornerRadius: 6).stroke(neonCyan.opacity(0.5), lineWidth: 1.5))
+        .offset(popup.offset)
+        .transition(.scale.combined(with: .move(edge: .bottom)))
+    }
+}
+
+// MARK: - Device Hologram View (Realistic Hardware Rendering)
+struct DeviceHologramView: View {
+    let device: IoTDevice
+    let color: Color
+    @State private var pulse = false
+    
+    var body: some View {
+        ZStack {
+            // Outer glow
+            RadialGradient(gradient: Gradient(colors: [color.opacity(0.2), .clear]), center: .center, startRadius: 20, endRadius: 90)
+            
+            // Render device-specific board
+            switch device.type {
+            case .arduino:
+                ArduinoBoardView(color: color, pulse: pulse)
+            case .raspberryPi:
+                RaspberryPiBoardView(color: color, pulse: pulse)
+            case .esp32:
+                ESP32BoardView(color: color, pulse: pulse)
+            case .educationalRobot:
+                RobotBoardView(color: color, pulse: pulse)
+            case .other:
+                ESP32BoardView(color: color, pulse: pulse)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
+                pulse = true
+            }
+        }
+    }
+}
+
+// MARK: - Arduino Uno Board
+struct ArduinoBoardView: View {
+    let color: Color
+    let pulse: Bool
+    private let boardColor = Color(red: 0.0, green: 0.35, blue: 0.55)
+    
+    var body: some View {
+        ZStack {
+            // PCB Board — the distinctive Arduino Uno shape
+            UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8, bottomTrailingRadius: 8, topTrailingRadius: 20)
+                .fill(boardColor)
+                .frame(width: 150, height: 105)
+                .overlay(
+                    UnevenRoundedRectangle(topLeadingRadius: 8, bottomLeadingRadius: 8, bottomTrailingRadius: 8, topTrailingRadius: 20)
+                        .stroke(color.opacity(0.6), lineWidth: 1.5)
+                )
+                .shadow(color: boardColor.opacity(0.5), radius: 12)
+            
+            // USB-B Port (top left, silver rectangle)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(LinearGradient(colors: [Color.gray.opacity(0.9), Color.white.opacity(0.5), Color.gray.opacity(0.7)], startPoint: .top, endPoint: .bottom))
+                .frame(width: 18, height: 14)
+                .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.gray, lineWidth: 1))
+                .offset(x: -60, y: -30)
+            
+            // DC Power Jack (below USB)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.black.opacity(0.9))
+                .frame(width: 14, height: 12)
+                .overlay(Circle().fill(Color.gray.opacity(0.5)).frame(width: 6, height: 6))
+                .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.gray.opacity(0.6), lineWidth: 0.5))
+                .offset(x: -60, y: -8)
+            
+            // ATmega328P main chip (center, large DIP)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.black.opacity(0.95))
+                .frame(width: 38, height: 20)
+                .overlay(
+                    VStack(spacing: 1) {
+                        Text("ATMEGA")
+                            .font(.system(size: 5, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.gray.opacity(0.8))
+                        Text("328P")
+                            .font(.system(size: 5, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.gray.opacity(0.8))
+                    }
+                )
+                .offset(x: 5, y: 5)
+            
+            // DIP chip pins (top row)
+            HStack(spacing: 2) {
+                ForEach(0..<14, id: \.self) { _ in
+                    Rectangle().fill(Color.gray.opacity(0.7)).frame(width: 2, height: 4)
+                }
+            }
+            .offset(x: 5, y: -8)
+            
+            // DIP chip pins (bottom row)
+            HStack(spacing: 2) {
+                ForEach(0..<14, id: \.self) { _ in
+                    Rectangle().fill(Color.gray.opacity(0.7)).frame(width: 2, height: 4)
+                }
+            }
+            .offset(x: 5, y: 18)
+            
+            // Digital Pin Headers (top edge — 14 pins)
+            HStack(spacing: 2.5) {
+                ForEach(0..<14, id: \.self) { _ in
+                    Rectangle().fill(Color.black).frame(width: 4, height: 8)
+                        .overlay(Circle().fill(color.opacity(0.5)).frame(width: 2.5, height: 2.5))
+                }
+            }
+            .offset(x: 10, y: -48)
+            
+            // Analog Pin Headers (bottom edge — 6 pins)
+            HStack(spacing: 2.5) {
+                ForEach(0..<6, id: \.self) { _ in
+                    Rectangle().fill(Color.black).frame(width: 4, height: 8)
+                        .overlay(Circle().fill(color.opacity(0.5)).frame(width: 2.5, height: 2.5))
+                }
+            }
+            .offset(x: -30, y: 48)
+            
+            // Power pin headers
+            HStack(spacing: 2.5) {
+                ForEach(0..<6, id: \.self) { _ in
+                    Rectangle().fill(Color.black).frame(width: 4, height: 8)
+                        .overlay(Circle().fill(color.opacity(0.5)).frame(width: 2.5, height: 2.5))
+                }
+            }
+            .offset(x: 20, y: 48)
+            
+            // Crystal Oscillator
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.gray.opacity(0.8))
+                .frame(width: 10, height: 6)
+                .offset(x: 35, y: -10)
+            
+            // Reset button (small circle)
+            Circle()
+                .fill(Color.red.opacity(0.7))
+                .frame(width: 8, height: 8)
+                .shadow(color: .red.opacity(0.3), radius: 3)
+                .offset(x: -35, y: 15)
+            
+            // Status LEDs
+            HStack(spacing: 5) {
+                Circle().fill(Color.green).frame(width: 4, height: 4)
+                    .shadow(color: .green, radius: pulse ? 5 : 2)
+                Circle().fill(Color.yellow).frame(width: 4, height: 4)
+                    .shadow(color: .yellow, radius: pulse ? 4 : 1)
+                Circle().fill(Color.red.opacity(0.6)).frame(width: 4, height: 4)
+            }
+            .offset(x: -25, y: -30)
+            
+            // "ARDUINO" label
+            Text("ARDUINO UNO")
+                .font(.system(size: 6, weight: .heavy, design: .monospaced))
+                .foregroundColor(.white.opacity(0.7))
+                .offset(x: 30, y: 35)
+        }
+    }
+}
+
+// MARK: - Raspberry Pi Board
+struct RaspberryPiBoardView: View {
+    let color: Color
+    let pulse: Bool
+    private let boardColor = Color(red: 0.0, green: 0.45, blue: 0.2)
+    
+    var body: some View {
+        ZStack {
+            // PCB Board (credit card size, green)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(boardColor)
+                .frame(width: 150, height: 100)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(color.opacity(0.5), lineWidth: 1.5)
+                )
+                .shadow(color: boardColor.opacity(0.5), radius: 12)
+            
+            // Mounting holes (4 corners)
+            ForEach([(x: -62, y: -38), (x: 62, y: -38), (x: -62, y: 38), (x: 62, y: 38)], id: \.x) { pos in
+                Circle().stroke(Color.white.opacity(0.4), lineWidth: 1).frame(width: 7, height: 7)
+                    .overlay(Circle().fill(Color.black.opacity(0.5)).frame(width: 4, height: 4))
+                    .offset(x: CGFloat(pos.x), y: CGFloat(pos.y))
+            }
+            
+            // Broadcom SoC (big silver square with heatsink pattern)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(LinearGradient(colors: [Color.gray.opacity(0.8), Color.white.opacity(0.4), Color.gray.opacity(0.6)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 28, height: 28)
+                .overlay(
+                    // Heatsink grid lines
+                    VStack(spacing: 3) {
+                        ForEach(0..<5, id: \.self) { _ in
+                            Rectangle().fill(Color.gray.opacity(0.5)).frame(height: 1)
+                        }
+                    }
+                    .padding(4)
+                )
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Color.gray, lineWidth: 0.5))
+                .offset(x: -10, y: -5)
+            
+            // GPIO 40-pin header (2 rows of 20, right side)
+            VStack(spacing: 1.5) {
+                HStack(spacing: 1.5) {
+                    ForEach(0..<20, id: \.self) { _ in
+                        Circle().fill(Color.yellow.opacity(0.8)).frame(width: 3, height: 3)
+                    }
+                }
+                HStack(spacing: 1.5) {
+                    ForEach(0..<20, id: \.self) { _ in
+                        Circle().fill(Color.yellow.opacity(0.8)).frame(width: 3, height: 3)
+                    }
+                }
+            }
+            .offset(x: 5, y: -42)
+            
+            // USB-A Ports (2 stacked, silver)
+            VStack(spacing: 3) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(LinearGradient(colors: [.gray, .white.opacity(0.5), .gray], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 20, height: 10)
+                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.gray, lineWidth: 0.5))
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(LinearGradient(colors: [.gray, .white.opacity(0.5), .gray], startPoint: .top, endPoint: .bottom))
+                    .frame(width: 20, height: 10)
+                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.gray, lineWidth: 0.5))
+            }
+            .offset(x: 60, y: -10)
+            
+            // Ethernet Port (silver, tall)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(LinearGradient(colors: [.gray.opacity(0.8), .white.opacity(0.4), .gray.opacity(0.6)], startPoint: .top, endPoint: .bottom))
+                .frame(width: 22, height: 18)
+                .overlay(
+                    VStack(spacing: 1) {
+                        // LED indicators on ethernet
+                        HStack(spacing: 8) {
+                            Circle().fill(Color.green.opacity(0.8)).frame(width: 3, height: 3)
+                                .shadow(color: .green, radius: pulse ? 3 : 1)
+                            Circle().fill(Color.orange.opacity(0.8)).frame(width: 3, height: 3)
+                        }
+                        RoundedRectangle(cornerRadius: 1).fill(Color.black.opacity(0.3)).frame(width: 14, height: 8)
+                    }
+                )
+                .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.gray, lineWidth: 0.5))
+                .offset(x: 60, y: 22)
+            
+            // USB-C Power Port (left edge)
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.gray.opacity(0.8))
+                .frame(width: 12, height: 6)
+                .offset(x: -68, y: 20)
+            
+            // HDMI Micro ports
+            VStack(spacing: 6) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.black.opacity(0.9))
+                    .frame(width: 10, height: 5)
+                    .overlay(RoundedRectangle(cornerRadius: 1).stroke(Color.gray.opacity(0.5), lineWidth: 0.5))
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.black.opacity(0.9))
+                    .frame(width: 10, height: 5)
+                    .overlay(RoundedRectangle(cornerRadius: 1).stroke(Color.gray.opacity(0.5), lineWidth: 0.5))
+            }
+            .offset(x: -68, y: -10)
+            
+            // SD Card slot (bottom edge)
+            RoundedRectangle(cornerRadius: 1)
+                .fill(Color.gray.opacity(0.7))
+                .frame(width: 18, height: 4)
+                .offset(x: -20, y: 48)
+            
+            // RAM chip
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.black.opacity(0.9))
+                .frame(width: 16, height: 12)
+                .overlay(
+                    Text("RAM")
+                        .font(.system(size: 4, weight: .bold, design: .monospaced))
+                        .foregroundColor(.gray.opacity(0.6))
+                )
+                .offset(x: 25, y: 5)
+            
+            // Activity LED
+            Circle().fill(Color.green).frame(width: 4, height: 4)
+                .shadow(color: .green, radius: pulse ? 6 : 2)
+                .offset(x: -50, y: 35)
+            
+            // Power LED
+            Circle().fill(Color.red.opacity(0.8)).frame(width: 4, height: 4)
+                .shadow(color: .red.opacity(0.5), radius: 3)
+                .offset(x: -42, y: 35)
+            
+            // Raspberry Pi logo text
+            Text("Raspberry Pi 4")
+                .font(.system(size: 5, weight: .heavy, design: .rounded))
+                .foregroundColor(.white.opacity(0.6))
+                .offset(x: -10, y: 30)
+        }
+    }
+}
+
+// MARK: - ESP32 Board
+struct ESP32BoardView: View {
+    let color: Color
+    let pulse: Bool
+    private let boardColor = Color(red: 0.1, green: 0.1, blue: 0.4)
+    
+    var body: some View {
+        ZStack {
+            // PCB (smaller, dark blue)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(boardColor)
+                .frame(width: 130, height: 60)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(color.opacity(0.5), lineWidth: 1.5)
+                )
+                .shadow(color: boardColor.opacity(0.5), radius: 12)
+            
+            // WiFi/BT Antenna (metal shield at top)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(LinearGradient(colors: [Color.gray.opacity(0.7), Color.white.opacity(0.3), Color.gray.opacity(0.5)], startPoint: .top, endPoint: .bottom))
+                .frame(width: 28, height: 20)
+                .overlay(
+                    // Antenna pattern
+                    Path { path in
+                        path.move(to: CGPoint(x: 5, y: 5))
+                        path.addLine(to: CGPoint(x: 23, y: 5))
+                        path.addLine(to: CGPoint(x: 23, y: 15))
+                        path.move(to: CGPoint(x: 8, y: 8))
+                        path.addLine(to: CGPoint(x: 20, y: 8))
+                        path.addLine(to: CGPoint(x: 20, y: 12))
+                    }
+                    .stroke(Color.gray.opacity(0.5), lineWidth: 0.5)
+                    .frame(width: 28, height: 20)
+                )
+                .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.gray.opacity(0.6), lineWidth: 0.5))
+                .offset(x: -42, y: 0)
+            
+            // ESP32 Main Chip (center)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.black.opacity(0.95))
+                .frame(width: 22, height: 18)
+                .overlay(
+                    VStack(spacing: 1) {
+                        Text("ESP32")
+                            .font(.system(size: 5, weight: .bold, design: .monospaced))
+                            .foregroundColor(Color.gray.opacity(0.8))
+                        Text("WROOM")
+                            .font(.system(size: 4, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.gray.opacity(0.6))
+                    }
+                )
+                .offset(x: -5, y: 0)
+            
+            // Pin headers (top row — 15 pins)
+            HStack(spacing: 2) {
+                ForEach(0..<15, id: \.self) { _ in
+                    Circle().fill(Color.yellow.opacity(0.7)).frame(width: 3, height: 3)
+                }
+            }
+            .offset(x: 5, y: -28)
+            
+            // Pin headers (bottom row — 15 pins)
+            HStack(spacing: 2) {
+                ForEach(0..<15, id: \.self) { _ in
+                    Circle().fill(Color.yellow.opacity(0.7)).frame(width: 3, height: 3)
+                }
+            }
+            .offset(x: 5, y: 28)
+            
+            // Micro USB port
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.gray.opacity(0.8))
+                .frame(width: 10, height: 6)
+                .overlay(RoundedRectangle(cornerRadius: 2).stroke(Color.gray, lineWidth: 0.5))
+                .offset(x: 55, y: 0)
+            
+            // LED
+            Circle().fill(Color.blue).frame(width: 4, height: 4)
+                .shadow(color: .blue, radius: pulse ? 6 : 2)
+                .offset(x: 40, y: -10)
+            
+            // Boot / EN buttons
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.white.opacity(0.7))
+                    .frame(width: 6, height: 4)
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color.white.opacity(0.7))
+                    .frame(width: 6, height: 4)
+            }
+            .offset(x: 40, y: 10)
+            
+            // Voltage regulator
+            RoundedRectangle(cornerRadius: 1)
+                .fill(Color.black.opacity(0.9))
+                .frame(width: 8, height: 10)
+                .offset(x: 25, y: 0)
+            
+            // Label
+            Text("ESP32")
+                .font(.system(size: 5, weight: .heavy, design: .monospaced))
+                .foregroundColor(.white.opacity(0.6))
+                .offset(x: 15, y: -18)
+        }
+    }
+}
+
+// MARK: - Educational Robot Board
+struct RobotBoardView: View {
+    let color: Color
+    let pulse: Bool
+    
+    var body: some View {
+        ZStack {
+            // Robot chassis (rounded)
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(red: 0.15, green: 0.15, blue: 0.2))
+                .frame(width: 140, height: 100)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(color.opacity(0.5), lineWidth: 1.5)
+                )
+                .shadow(color: color.opacity(0.3), radius: 12)
+            
+            // Wheels (left and right)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.black.opacity(0.9))
+                .frame(width: 12, height: 30)
+                .overlay(
+                    VStack(spacing: 3) {
+                        ForEach(0..<5, id: \.self) { _ in
+                            Rectangle().fill(Color.gray.opacity(0.4)).frame(width: 8, height: 1)
+                        }
+                    }
+                )
+                .offset(x: -72, y: 0)
+            
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.black.opacity(0.9))
+                .frame(width: 12, height: 30)
+                .overlay(
+                    VStack(spacing: 3) {
+                        ForEach(0..<5, id: \.self) { _ in
+                            Rectangle().fill(Color.gray.opacity(0.4)).frame(width: 8, height: 1)
+                        }
+                    }
+                )
+                .offset(x: 72, y: 0)
+            
+            // Motor driver chips (L/R)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.black.opacity(0.9))
+                .frame(width: 16, height: 12)
+                .overlay(Text("M1").font(.system(size: 4, weight: .bold, design: .monospaced)).foregroundColor(.gray.opacity(0.7)))
+                .offset(x: -48, y: 0)
+            
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.black.opacity(0.9))
+                .frame(width: 16, height: 12)
+                .overlay(Text("M2").font(.system(size: 4, weight: .bold, design: .monospaced)).foregroundColor(.gray.opacity(0.7)))
+                .offset(x: 48, y: 0)
+            
+            // Brain board (center, raised)
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color(red: 0.0, green: 0.3, blue: 0.5))
+                .frame(width: 50, height: 35)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(color.opacity(0.6), lineWidth: 1)
+                )
+                .overlay(
+                    VStack(spacing: 2) {
+                        Image(systemName: "cpu")
+                            .font(.system(size: 12))
+                            .foregroundColor(color)
+                        Text("CORE")
+                            .font(.system(size: 4, weight: .bold, design: .monospaced))
+                            .foregroundColor(color.opacity(0.8))
+                    }
+                )
+            
+            // Ultrasonic sensor (front, two circles)
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(Color.gray.opacity(0.7))
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().fill(Color.black.opacity(0.5)).frame(width: 8, height: 8))
+                    .overlay(Circle().stroke(Color.gray, lineWidth: 0.5))
+                Circle()
+                    .fill(Color.gray.opacity(0.7))
+                    .frame(width: 14, height: 14)
+                    .overlay(Circle().fill(Color.black.opacity(0.5)).frame(width: 8, height: 8))
+                    .overlay(Circle().stroke(Color.gray, lineWidth: 0.5))
+            }
+            .offset(y: -42)
+            
+            // Sensor label
+            Text("SONAR")
+                .font(.system(size: 4, weight: .bold, design: .monospaced))
+                .foregroundColor(.gray.opacity(0.6))
+                .offset(y: -30)
+            
+            // Battery indicator area (bottom)
+            HStack(spacing: 2) {
+                RoundedRectangle(cornerRadius: 1).fill(Color.green).frame(width: 8, height: 6)
+                RoundedRectangle(cornerRadius: 1).fill(Color.green).frame(width: 8, height: 6)
+                RoundedRectangle(cornerRadius: 1).fill(Color.yellow).frame(width: 8, height: 6)
+                RoundedRectangle(cornerRadius: 1).fill(Color.gray.opacity(0.3)).frame(width: 8, height: 6)
+            }
+            .offset(y: 35)
+            
+            // Power LED
+            Circle().fill(Color.green).frame(width: 5, height: 5)
+                .shadow(color: .green, radius: pulse ? 6 : 2)
+                .offset(x: -20, y: 35)
+            
+            // Label
+            Text("KINE-SCOUT")
+                .font(.system(size: 5, weight: .heavy, design: .monospaced))
+                .foregroundColor(.white.opacity(0.6))
+                .offset(y: 46)
+        }
+    }
+}

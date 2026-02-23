@@ -291,35 +291,33 @@ struct ProfileSettingsView: View {
         if motionManager.isGyroAvailable {
             motionManager.gyroUpdateInterval = 0.1
             motionManager.startGyroUpdates(to: .main) { _, _ in
-                DispatchQueue.main.async {
-                    sampleCount += 1
-                    self.calibrationProgress = Double(sampleCount) / Double(totalSamples)
-                    if sampleCount >= totalSamples {
-                        motionManager.stopGyroUpdates()
-                        self.calibrationDone = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                            self.showCalibrationProgress = false
-                            self.showToastMessage("✓ Gyroscope calibrated successfully")
-                        }
+                // We're already on .main as per startGyroUpdates(to: .main)
+                sampleCount += 1
+                self.calibrationProgress = Double(sampleCount) / Double(totalSamples)
+                if sampleCount >= totalSamples {
+                    motionManager.stopGyroUpdates()
+                    self.calibrationDone = true
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 1_500_000_000)
+                        self.showCalibrationProgress = false
+                        self.showToastMessage("✓ Gyroscope calibrated successfully")
                     }
                 }
             }
         } else {
             // Simulate for devices without gyroscope
-            var t = 0.0
-            Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { timer in
-                DispatchQueue.main.async {
+            Task { @MainActor in
+                var t = 0.0
+                while t < 1.0 {
+                    try? await Task.sleep(nanoseconds: 80_000_000)
+                    guard !Task.isCancelled else { break }
                     t += 0.02
                     self.calibrationProgress = min(t, 1.0)
-                    if t >= 1.0 {
-                        timer.invalidate()
-                        self.calibrationDone = true
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            self.showCalibrationProgress = false
-                            self.showToastMessage("✓ Gyroscope calibrated successfully")
-                        }
-                    }
                 }
+                self.calibrationDone = true
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                self.showCalibrationProgress = false
+                self.showToastMessage("✓ Gyroscope calibrated successfully")
             }
         }
     }
@@ -327,7 +325,8 @@ struct ProfileSettingsView: View {
     private func showToastMessage(_ msg: String) {
         toastMessage = msg
         withAnimation(.spring()) { showToast = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             withAnimation { showToast = false }
         }
     }
@@ -340,6 +339,7 @@ struct ProfileCard: View {
     @ObservedObject var settingsManager: SettingsManager
     @State private var showAvatarPicker = false
     @State private var showFullAvatarBox = false
+    @State private var showExpandedAvatar = false
     @State private var selectedItem: PhotosPickerItem?
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
@@ -372,25 +372,36 @@ struct ProfileCard: View {
             .padding(.bottom, 20)
 
             // ── Main Avatar Display ──
-            ZStack {
-                Circle()
-                    .stroke(settingsManager.avatarColor.opacity(0.3), lineWidth: 8)
-                    .frame(width: 140, height: 140)
-                    .blur(radius: 8)
-
-                if let imageData = settingsManager.profileImageData, let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 120, height: 120)
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(settingsManager.avatarColor, lineWidth: 2))
-                } else {
-                    RobotDisplayView(type: settingsManager.avatarType, color: settingsManager.avatarColor)
-                        .frame(width: 120, height: 120)
+            Button(action: {
+                withAnimation(.spring()) {
+                    showExpandedAvatar = true
                 }
+            }) {
+                ZStack {
+                    if let imageData = settingsManager.profileImageData, let uiImage = UIImage(data: imageData) {
+                        Circle()
+                            .stroke(settingsManager.avatarColor.opacity(0.3), lineWidth: 8)
+                            .frame(width: 140, height: 140)
+                            .blur(radius: 8)
+                            
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 120, height: 120)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(settingsManager.avatarColor, lineWidth: 2))
+                    } else {
+                        CoreIdentityCircle(
+                            avatarType: settingsManager.avatarType,
+                            avatarColor: settingsManager.avatarColor,
+                            backgroundTheme: settingsManager.backgroundTheme,
+                            size: 140
+                        )
+                    }
+                }
+                .padding(.bottom, 16)
             }
-            .padding(.bottom, 16)
+            .buttonStyle(PlainButtonStyle())
 
             // ── Name & greeting ──
             VStack(spacing: 4) {
@@ -422,7 +433,7 @@ struct ProfileCard: View {
                     
                     HStack(spacing: 12) {
                         // Display first 3 or 4
-                        ForEach(RobotType.allModels.prefix(3), id: \.self) { type in
+                        ForEach(CoreShape.allModels.prefix(3), id: \.self) { type in
                             AvatarSelectorItem(
                                 type: type,
                                 isSelected: settingsManager.avatarType == type && settingsManager.profileImageData == nil,
@@ -492,7 +503,7 @@ struct ProfileCard: View {
             }
             .padding(.bottom, 24)
 
-            // ── Name Field ──
+            // Name Field ──
             VStack(alignment: .leading, spacing: 8) {
                 Text("NEURAL SIGNATURE")
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
@@ -526,13 +537,17 @@ struct ProfileCard: View {
         .sheet(isPresented: $showAvatarPicker) {
             PhotoIdentitySheet(settingsManager: settingsManager, isPresented: $showAvatarPicker, selectedItem: $selectedItem)
         }
+        // Full Screen Expanded Avatar (Snapchat style)
+        .fullScreenCover(isPresented: $showExpandedAvatar) {
+            AvatarExpandedView(settingsManager: settingsManager, isPresented: $showExpandedAvatar)
+        }
     }
 }
 
 // MARK: - Sub-components for ProfileCard
 
 struct AvatarSelectorItem: View {
-    let type: RobotType
+    let type: CoreShape
     let isSelected: Bool
     let color: Color
     let action: () -> Void
@@ -544,14 +559,13 @@ struct AvatarSelectorItem: View {
                     .fill(isSelected ? color : Color.white.opacity(0.05))
                     .frame(width: 44, height: 44)
                 
-                // Show the robot image cutout even in the selector
-                Image(type.imageName)
+                // Show the abstract core icon in the selector
+                Image(systemName: type.icon)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 30, height: 30)
-                    .scaleEffect(isSelected ? 0.9 : 0.8)
-                    .colorInvert()
-                    .blendMode(isSelected ? .destinationOut : .screen) // Cool visual effect
+                    .frame(width: 25, height: 25)
+                    .foregroundColor(.white)
+                    .scaleEffect(isSelected ? 1.0 : 0.8)
             }
         }
     }
@@ -608,7 +622,7 @@ struct FullAvatarBoxView: View {
 
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100))], spacing: 20) {
-                        ForEach(RobotType.allModels, id: \.self) { type in
+                        ForEach(CoreShape.allModels, id: \.self) { type in
                             Button(action: {
                                 settingsManager.avatarType = type
                                 settingsManager.profileImageData = nil
@@ -620,22 +634,139 @@ struct FullAvatarBoxView: View {
                                             .fill(Color.white.opacity(0.05))
                                             .frame(width: 90, height: 90)
                                         
-                                        Image(type.imageName)
+                                        Image(systemName: type.icon)
                                             .resizable()
                                             .scaledToFit()
-                                            .padding(15)
-                                            .colorInvert()
-                                            .blendMode(.screen)
+                                            .frame(width: 40, height: 40)
+                                            .foregroundColor(.white)
                                     }
                                     Text(type.rawValue.uppercased())
                                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                                         .foregroundColor(settingsManager.avatarType == type ? neonCyan : .gray)
+                                        .padding(.top, 4)
                                 }
                             }
                         }
                     }
                     .padding(30)
                 }
+            }
+        }
+    }
+}
+
+// MARK: - Avatar Expanded View
+struct AvatarExpandedView: View {
+    @ObservedObject var settingsManager: SettingsManager
+    @Binding var isPresented: Bool
+    
+    @State private var appearAnimation = false
+    
+    var body: some View {
+        ZStack {
+            // New 3D Dynamic Background System
+            AvatarBackgroundEngine(theme: settingsManager.backgroundTheme, color: settingsManager.avatarColor)
+            
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        withAnimation(.spring()) {
+                            isPresented = false
+                        }
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding()
+                    }
+                }
+                Spacer()
+            }
+            .zIndex(10)
+            
+            VStack(spacing: 0) {
+                // The Full 3D Avatar
+                ZStack {
+                    if let imageData = settingsManager.profileImageData, let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 250, height: 250)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(settingsManager.avatarColor, lineWidth: 4))
+                            .shadow(color: settingsManager.avatarColor.opacity(0.8), radius: 30)
+                    } else {
+                        // Core 3D Interactive Model
+                        Avatar3DView(avatarType: settingsManager.avatarType, avatarColor: settingsManager.avatarColor, isExpanded: true)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .opacity(appearAnimation ? 1.0 : 0.0)
+                    }
+                }
+                .layoutPriority(1)
+                
+                // Bottom Control Panel
+                VStack(spacing: 20) {
+                    // Name plate
+                    VStack(spacing: 8) {
+                        Text(settingsManager.userName.isEmpty ? "STUDENT" : settingsManager.userName.uppercased())
+                            .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                            .foregroundColor(.white)
+                            .shadow(color: .black, radius: 5)
+                        
+                        Text("MODEL: \(settingsManager.avatarType.rawValue.uppercased())")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(settingsManager.avatarColor)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(20)
+                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(settingsManager.avatarColor.opacity(0.5), lineWidth: 1))
+                    }
+                    
+                    // Background Selector
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("ENVIRONMENT MAPPING")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.horizontal, 24)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(AvatarBackgroundTheme.allCases) { theme in
+                                    Button(action: {
+                                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                                        impact.impactOccurred()
+                                        withAnimation(.easeInOut) {
+                                            settingsManager.backgroundTheme = theme
+                                        }
+                                    }) {
+                                        Text(theme.rawValue.uppercased())
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(settingsManager.backgroundTheme == theme ? .black : settingsManager.avatarColor)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 10)
+                                            .background(settingsManager.backgroundTheme == theme ? settingsManager.avatarColor : Color.black.opacity(0.5))
+                                            .cornerRadius(12)
+                                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(settingsManager.avatarColor.opacity(0.4), lineWidth: 1))
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                        }
+                    }
+                }
+                .padding(.bottom, 40)
+                .background(
+                    LinearGradient(colors: [Color.black.opacity(0.0), Color.black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
+                )
+                .opacity(appearAnimation ? 1 : 0)
+                .offset(y: appearAnimation ? 0 : 30)
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.7, blendDuration: 0.5)) {
+                appearAnimation = true
             }
         }
     }
@@ -837,11 +968,17 @@ enum LiDARDensity: String, CaseIterable, Hashable {
 @MainActor
 class SettingsManager: ObservableObject {
     @AppStorage("userName") var userName: String = "Engineering Student"
-    @AppStorage("avatarType") var avatarType: RobotType = .robot1
+    @AppStorage("avatarType") var avatarType: CoreShape = .sphere
     @AppStorage("avatarColorName") var avatarColorName: String = "cyan"
     @AppStorage("customAvatarColorHex") var customAvatarColorHex: String = "#00FFFF"
     @AppStorage("profileImageData") var profileImageData: Data?
     @AppStorage("useCustomColor") var useCustomColor: Bool = false
+    @AppStorage("avatarBgStyle") var avatarBgStyle: String = AvatarBackgroundTheme.nebulaVoid.rawValue
+    
+    var backgroundTheme: AvatarBackgroundTheme {
+        get { AvatarBackgroundTheme(rawValue: avatarBgStyle) ?? .nebulaVoid }
+        set { avatarBgStyle = newValue.rawValue }
+    }
     
     var customAvatarColor: Color {
         get { Color(hex: customAvatarColorHex) }

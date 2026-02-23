@@ -2,7 +2,6 @@
 import SwiftUI
 #endif
 
-#if os(iOS)
 import AudioToolbox
 import ARKit
 import SceneKit
@@ -19,7 +18,7 @@ import UIKit
 
 // MARK: - App Tabs
 
-@available(iOS 16.0, *)
+
 enum AppTab {
     case home
     case iot
@@ -30,13 +29,13 @@ enum AppTab {
 
 // MARK: - Main View
 
-@available(iOS 16.0, *)
+
 struct KineprintView: View {
     @StateObject private var viewModel = KineprintViewModel()
     @State private var selectedTab: AppTab = .home
     @State private var showingARAnimation = false
+    @State private var showExitConfirm = false
     @State private var showGoodbye = false
-    @State private var hasGreetedToday = false
     private let speechSynth = AVSpeechSynthesizer()
     @Environment(\.scenePhase) private var scenePhase
     
@@ -50,7 +49,7 @@ struct KineprintView: View {
             } else {
                 VStack(spacing: 0) {
                     if selectedTab != .ar {
-                        TopNavigationBar(viewModel: viewModel)
+                        TopNavigationBar(viewModel: viewModel, showExitConfirm: $showExitConfirm)
                     }
                     
                     ZStack {
@@ -88,34 +87,99 @@ struct KineprintView: View {
                     }
                 }
             }
+            // Exit Confirmation Overlay
+            if showExitConfirm {
+                ZStack {
+                    Color.black.opacity(0.85)
+                        .ignoresSafeArea()
+                        .onTapGesture { withAnimation { showExitConfirm = false } }
+                    
+                    VStack(spacing: 24) {
+                        Image(systemName: "power.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(Color(red: 0, green: 1, blue: 0.85))
+                            .shadow(color: Color(red: 0, green: 1, blue: 0.85).opacity(0.5), radius: 10)
+                        
+                        VStack(spacing: 8) {
+                            Text("TERMINATE SESSION?")
+                                .font(.system(size: 18, weight: .heavy, design: .monospaced))
+                                .foregroundColor(.white)
+                            
+                            Text("Are you sure you want to exit the Kineprint environment?")
+                                .font(.system(size: 13, design: .monospaced))
+                                .foregroundColor(.gray)
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 40)
+                        }
+                        
+                        HStack(spacing: 20) {
+                            // NO Button
+                            Button(action: {
+                                let name = viewModel.userName
+                                speak("\(name), let's continue!")
+                                withAnimation {
+                                    showExitConfirm = false
+                                    selectedTab = .home
+                                }
+                            }) {
+                                Text("NO")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.white)
+                                    .frame(width: 100, height: 44)
+                                    .background(Color.white.opacity(0.1))
+                                    .cornerRadius(8)
+                                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.3), lineWidth: 1))
+                            }
+                            
+                            // YES Button
+                            Button(action: {
+                                withAnimation {
+                                    showExitConfirm = false
+                                    showGoodbye = true
+                                }
+                                speakGoodbye()
+                            }) {
+                                Text("YES")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.black)
+                                    .frame(width: 100, height: 44)
+                                    .background(Color(red: 0, green: 1, blue: 0.85))
+                                    .cornerRadius(8)
+                            }
+                        }
+                    }
+                    .padding(30)
+                    .background(Color.black)
+                    .cornerRadius(20)
+                    .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color(red: 0, green: 1, blue: 0.85).opacity(0.3), lineWidth: 1))
+                    .padding(.horizontal, 20)
+                }
+                .transition(.opacity)
+            }
             // Goodbye overlay
             if showGoodbye {
                 ZStack {
-                    Color.black.opacity(0.92)
+                    Color.black
                         .ignoresSafeArea()
                     
                     VStack(spacing: 20) {
                         Text("👋")
-                            .font(.system(size: 64))
+                            .font(.system(size: 80))
                             .scaleEffect(showGoodbye ? 1.0 : 0.5)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.6), value: showGoodbye)
                         
-                        Text("Goodbye,")
-                            .font(.system(size: 16, weight: .medium, design: .monospaced))
+                        Text("SYSTEM LOGOFF")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
                             .foregroundColor(.gray)
                         
-                        Text(viewModel.userName.uppercased() + "!")
-                            .font(.system(size: 28, weight: .heavy, design: .monospaced))
+                        Text("GOODBYE \(viewModel.userName.uppercased()) BUDDY!")
+                            .font(.system(size: 24, weight: .heavy, design: .monospaced))
                             .foregroundColor(Color(red: 0, green: 1, blue: 0.85))
                             .shadow(color: Color(red: 0, green: 1, blue: 0.85).opacity(0.5), radius: 12)
                         
-                        Text("We are waiting for you to\ncome back again! 🚀")
-                            .font(.system(size: 13, design: .monospaced))
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
-                            .padding(.top, 4)
+                        Text("Waiting for you to come back!")
+                            .font(.system(size: 16, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.8))
                     }
-                    .scaleEffect(showGoodbye ? 1.0 : 0.7)
                 }
                 .transition(.opacity)
             }
@@ -125,15 +189,18 @@ struct KineprintView: View {
         .animation(.easeInOut, value: viewModel.isOnboardingComplete)
         .animation(.easeInOut, value: selectedTab)
         .animation(.spring(response: 0.5, dampingFraction: 0.8), value: showGoodbye)
+        .onAppear {
+            if viewModel.isOnboardingComplete {
+                speakWelcomeBack()
+            }
+        }
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 showGoodbye = false
-                if viewModel.isOnboardingComplete && !viewModel.isBooting {
-                    speakWelcomeBack()
-                }
+                showExitConfirm = false
             } else if newPhase == .background {
-                // Dim the goodbye slightly - user found it too much
                 showGoodbye = false 
+                showExitConfirm = false
             }
         }
     }
@@ -149,27 +216,38 @@ struct KineprintView: View {
     
     private func speakWelcomeBack() {
         let name = viewModel.userName.trimmingCharacters(in: .whitespaces)
-        let text = "\(timeGreeting), \(name)! Welcome back to KinePrint. We are glad you are here."
+        let text = "\(timeGreeting), \(name)!"
         speak(text)
     }
     
     private func speakGoodbye() {
         let name = viewModel.userName.trimmingCharacters(in: .whitespaces)
-        speak("Goodbye \(name)! We are waiting for you to come back again!")
+        speak("Goodbye \(name) buddy! Waiting for you to come back!")
     }
     
     private func speak(_ text: String) {
         speechSynth.stopSpeaking(at: .immediate)
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = 0.50
-        utterance.pitchMultiplier = 1.05
+        
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        // Prioritize "Samantha" or "Alex" for English, or any voice with "premium" or "enhanced"
+        let preferredVoice = voices.first { $0.identifier.contains("premium") || $0.identifier.contains("enhanced") }
+            ?? voices.first { $0.name == "Samantha" }
+            ?? AVSpeechSynthesisVoice(language: "en-US")
+        
+        utterance.voice = preferredVoice
+        utterance.rate = 0.45 // Natural speaking speed
+        utterance.pitchMultiplier = 1.05 // Friendly, approachable tone
         utterance.volume = 0.9
+        
+        // Add a tiny bit of natural phrasing pause
+        utterance.postUtteranceDelay = 0.1
+        
         speechSynth.speak(utterance)
     }
 }
 
-@available(iOS 16.0, *)
+
 struct ARScannerTab: View {
     @ObservedObject var viewModel: KineprintViewModel
 
@@ -218,7 +296,7 @@ struct ARScannerTab: View {
     }
 }
 
-@available(iOS 16.0, *)
+
 struct CustomBottomToolbar: View {
     @ObservedObject var viewModel: KineprintViewModel
     @Binding var selectedTab: AppTab
@@ -292,7 +370,7 @@ struct CustomBottomToolbar: View {
     }
 }
 
-@available(iOS 16.0, *)
+
 struct TabBarButton: View {
     let icon: String
     let label: String
@@ -317,7 +395,7 @@ struct TabBarButton: View {
     }
 }
 
-@available(iOS 16.0, *)
+
 struct AROpeningAnimation: View {
     var onComplete: () -> Void
     @State private var scale: CGFloat = 0.1
@@ -357,7 +435,8 @@ struct AROpeningAnimation: View {
                 scale = 15.0
                 opacity = 0.0
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 onComplete()
             }
         }
@@ -366,14 +445,14 @@ struct AROpeningAnimation: View {
 
 // MARK: - Matrix/Hacker Rain Boot Animation
 
-@available(iOS 16.0, *)
+
 struct BootSequenceView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var columns: [MatrixColumn] = []
     @State private var bootProgress: CGFloat = 0
     @State private var terminalLines: [String] = []
     @State private var showWelcome = false
-    @State private var displayTimer: Timer? = nil
+    @State private var isMatrixRunning = false
 
     private let neonGreen = Color(red: 0.1, green: 1.0, blue: 0.2)
     private let brightGreen = Color(red: 0.6, green: 1.0, blue: 0.6)
@@ -478,33 +557,36 @@ struct BootSequenceView: View {
             )
         }
 
-        // Animate columns
-        displayTimer = Timer.scheduledTimer(withTimeInterval: 0.07, repeats: true) { _ in
-            for i in columns.indices {
-                columns[i].advance()
+        isMatrixRunning = true
+        Task { @MainActor in
+            while isMatrixRunning {
+                try? await Task.sleep(nanoseconds: 70_000_000) // 0.07s
+                guard !Task.isCancelled && isMatrixRunning else { break }
+                for i in columns.indices {
+                    columns[i].advance()
+                }
             }
         }
     }
 
     private func startBootSequence() {
         let total = bootMessages.count
-        for (idx, msg) in bootMessages.enumerated() {
-            DispatchQueue.main.asyncAfter(deadline: .now() + Double(idx) * 0.55) {
+        Task { @MainActor in
+            for (idx, msg) in bootMessages.enumerated() {
+                try? await Task.sleep(nanoseconds: 550_000_000) // 0.55s
                 withAnimation(.easeIn(duration: 0.2)) {
                     terminalLines.append(msg)
                     bootProgress = CGFloat(idx + 1) / CGFloat(total)
                 }
-                if idx == total - 1 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        withAnimation(.spring()) { showWelcome = true }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                            displayTimer?.invalidate()
-                            withAnimation(.easeOut(duration: 0.6)) {
-                                viewModel.isBooting = false
-                            }
-                        }
-                    }
-                }
+            }
+            
+            try? await Task.sleep(nanoseconds: 400_000_000) // 0.4s
+            withAnimation(.spring()) { showWelcome = true }
+            
+            try? await Task.sleep(nanoseconds: 1_200_000_000) // 1.2s
+            isMatrixRunning = false
+            withAnimation(.easeOut(duration: 0.6)) {
+                viewModel.isBooting = false
             }
         }
     }
@@ -553,7 +635,7 @@ struct MatrixColumn {
     }
 }
 
-@available(iOS 16.0, *)
+
 struct MatrixColumnView: View {
     let column: MatrixColumn
     let screenHeight: CGFloat
@@ -579,7 +661,7 @@ struct MatrixColumnView: View {
     }
 }
 
-@available(iOS 16.0, *)
+
 struct ScanningLine: View {
     @State private var offset: CGFloat = -400
     
@@ -606,9 +688,10 @@ struct ScanningLine: View {
 
 // MARK: - Top Navigation Bar (Blueprint HUD Header)
 
-@available(iOS 16.0, *)
+
 struct TopNavigationBar: View {
     @ObservedObject var viewModel: KineprintViewModel
+    @Binding var showExitConfirm: Bool
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     private var timeBasedGreeting: String {
@@ -660,6 +743,16 @@ struct TopNavigationBar: View {
                                 .stroke((viewModel.trackingActive ? Color.green : neonCyan).opacity(0.3), lineWidth: 0.5)
                         )
                 )
+                
+                // Exit Button
+                Button(action: { withAnimation { showExitConfirm = true } }) {
+                    Image(systemName: "power")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.red.opacity(0.8))
+                        .padding(8)
+                        .background(Circle().fill(Color.red.opacity(0.1)))
+                }
+                .padding(.leading, 8)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
@@ -675,7 +768,7 @@ struct TopNavigationBar: View {
 
 // MARK: - Sidebar Controls
 
-@available(iOS 16.0, *)
+
 struct SidebarControls: View {
     @ObservedObject var viewModel: KineprintViewModel
     
@@ -740,7 +833,7 @@ struct SidebarControls: View {
 }
 // MARK: - Deep Scan HUD
 
-@available(iOS 16.0, *)
+
 struct DeepScanHUD: View {
     @ObservedObject var viewModel: KineprintViewModel
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
@@ -842,7 +935,7 @@ struct DeepScanHUD: View {
     }
 }
 
-@available(iOS 16.0, *)
+
 struct ScanDetailRow: View {
     let label: String
     let value: String
@@ -859,7 +952,7 @@ struct ScanDetailRow: View {
         }
     }
 }
-@available(iOS 16.0, *)
+
 struct ControlButton: View {
     let symbol: String
     let label: String
@@ -894,7 +987,7 @@ struct ControlButton: View {
 
 // MARK: - Bottom Dashboard (Real-Time Physics Charts)
 
-@available(iOS 16.0, *)
+
 struct MotionAnalysisDashboard: View {
     @ObservedObject var viewModel: KineprintViewModel
     
@@ -1009,7 +1102,7 @@ struct MotionAnalysisDashboard: View {
     }
 }
 
-@available(iOS 16.0, *)
+
 struct DataReadout: View {
     let label: String
     let value: String
@@ -1063,14 +1156,14 @@ enum BuddyStatus {
     case celebrating
 }
 
-@available(iOS 16.0, *)
+
 struct ChartDataPoint: Identifiable {
     let id = UUID()
     let index: Int
     let value: Double
 }
 
-@available(iOS 16.0, *)
+
 struct ResearchEntry: Identifiable, Codable {
     let id: UUID
     let date: Date
@@ -1083,7 +1176,7 @@ struct ResearchEntry: Identifiable, Codable {
     var imagePath: String? = nil
 }
 
-@available(iOS 16.0, *)
+
 struct ResearchPaper: Identifiable, Codable {
     let id: UUID
     let date: Date
@@ -1093,7 +1186,7 @@ struct ResearchPaper: Identifiable, Codable {
 
 // MARK: - ViewModel
 
-@available(iOS 16.0, *)
+
 @MainActor
 class KineprintViewModel: ObservableObject {
     @Published var showVectors = true
@@ -1117,11 +1210,17 @@ class KineprintViewModel: ObservableObject {
     
     // Personalization & State
     @AppStorage("userName") var userName: String = ""
-    @AppStorage("avatarType") var avatarType: RobotType = .robot1
+    @AppStorage("avatarType") var avatarType: CoreShape = .sphere
     @AppStorage("avatarColorName") var avatarColorName: String = "cyan"
     @AppStorage("customAvatarColorHex") var customAvatarColorHex: String = "#00FFFF"
     @AppStorage("profileImageData") var profileImageData: Data?
     @AppStorage("useCustomColor") var useCustomColor: Bool = false
+    @AppStorage("avatarBgStyle") var avatarBgStyle: String = AvatarBackgroundTheme.nebulaVoid.rawValue
+    
+    var backgroundTheme: AvatarBackgroundTheme {
+        get { AvatarBackgroundTheme(rawValue: avatarBgStyle) ?? .nebulaVoid }
+        set { avatarBgStyle = newValue.rawValue }
+    }
     
     var customAvatarColor: Color {
         get { Color(hex: customAvatarColorHex) }
@@ -1293,12 +1392,15 @@ class KineprintViewModel: ObservableObject {
         isDeepScanning = true
         deepScanProgress = 0
         
-        Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { timer in
-            DispatchQueue.main.async {
+        Task { @MainActor in
+            while isDeepScanning {
+                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s
+                guard !Task.isCancelled else { break }
+                
                 self.deepScanProgress += 0.02
                 if self.deepScanProgress >= 1.0 {
-                    timer.invalidate()
                     self.completeDeepScan()
+                    break
                 }
             }
         }
@@ -1319,7 +1421,8 @@ class KineprintViewModel: ObservableObject {
         researchEntries.append(newEntry)
         lastScannedEntry = newEntry
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
             self.isDeepScanning = false
             self.lastScannedEntry = nil
         }
@@ -1350,10 +1453,8 @@ class KineprintViewModel: ObservableObject {
     
     func captureBlueprintImage() {
         // Trigger haptic
-        #if os(iOS)
         let generator = UIImpactFeedbackGenerator(style: .heavy)
         generator.impactOccurred()
-        #endif
         
         // Take snapshot immediately
         let snapshot = onCaptureBlueprint?()
@@ -1362,7 +1463,8 @@ class KineprintViewModel: ObservableObject {
         showCapturedBlueprint = false
         
         // Let processing animation run for ~2.5 seconds, then show blueprint
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
             self.generateBlueprintResult(image: snapshot)
             withAnimation(.easeOut(duration: 0.5)) {
                 self.isHackerProcessing = false
@@ -1456,4 +1558,4 @@ class KineprintViewModel: ObservableObject {
         showCapturedBlueprint = false
     }
 }
-#endif
+

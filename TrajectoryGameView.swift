@@ -3,8 +3,6 @@ import SwiftUI
 
 // MARK: - Match Trajectory Game
 
-@MainActor
-@available(iOS 16.0, *)
 struct TrajectoryGameView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var score: Int
@@ -22,16 +20,17 @@ struct TrajectoryGameView: View {
     @State private var streak = 0
     @State private var totalScore = 0
     @State private var canvasSize: CGSize = .zero
-    @State private var thinkingLog: [String] = ["SYSTEM_INIT: READY", "AWAITING_KINEMATIC_INPUT"]
+    @State private var thinkingLog: [String] = ["SYSTEM_INIT: SUCCESS", "KINETIC_LINK: ESTABLISHED"]
+    @State private var drawPulse = false
     
     // Physics parameters for the current level
     private var physicsParams: (v0: Double, angle: Double) {
         let v0 = 15.0 + Double(level) * 3.0
-        let angle = Double.pi / 4.0 // 45 degrees for classic parabola
+        let angle = Double.pi / 4.0
         return (v0, angle)
     }
     
-    // Target points calculated to fit the canvas perfectly
+    // Target points calculation
     private var targetPoints: [CGPoint] {
         guard canvasSize.width > 0 && canvasSize.height > 0 else { return [] }
         let g = 9.81
@@ -41,14 +40,13 @@ struct TrajectoryGameView: View {
         let range = v0 * v0 * sin(2.0 * angle) / g
         let maxHeight = v0 * v0 * pow(sin(angle), 2) / (2 * g)
         
-        // Dynamic scaling to fill ~80% of canvas
-        let scaleX = (canvasSize.width * 0.85) / range
-        let scaleY = (canvasSize.height * 0.70) / maxHeight
-        let offsetX = canvasSize.width * 0.07 // Left margin
-        let offsetY = canvasSize.height * 0.15 // Bottom margin
+        let scaleX = (canvasSize.width * 0.80) / range
+        let scaleY = (canvasSize.height * 0.60) / maxHeight
+        let offsetX = canvasSize.width * 0.10
+        let offsetY = canvasSize.height * 0.20
         
         var pts: [CGPoint] = []
-        for i in stride(from: 0.0, through: flightTime, by: flightTime / 40.0) {
+        for i in stride(from: 0.0, through: flightTime, by: flightTime / 50.0) {
             let t = i
             let x = v0 * cos(angle) * t
             let y = v0 * sin(angle) * t - 0.5 * g * t * t
@@ -65,102 +63,87 @@ struct TrajectoryGameView: View {
             Color.black.ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Scientist HUD Header
                 GameHeader(
-                    title: "TRAJECTORY_CALIBRATION",
+                    title: "TRAJECTORY_PROJECTION",
                     icon: "target",
                     level: level,
                     score: totalScore,
                     streak: streak,
                     onDismiss: { dismiss() },
-                    onHint: { showHint.toggle() }
+                    onHint: { withAnimation { showHint.toggle() } }
                 )
                 
-                // Advanced Scientific Layout
                 ZStack {
-                    // Grid background
                     GeometryReader { geo in
                         GridBackground(color: neonCyan, size: geo.size)
                             .onAppear { canvasSize = geo.size }
-                            .onChange(of: geo.size) { newSize in canvasSize = newSize }
                     }
                     
-                    VStack(alignment: .leading, spacing: 0) {
-                        // Data Stream Overlay
+                    VStack(spacing: 0) {
                         ScientificHUDOverlay(level: level, params: physicsParams, logs: thinkingLog)
                             .padding(16)
                         
+                        if showHint {
+                            FormulaCard(lines: [
+                                "y = x·tan(θ) - (g·x²) / (2·v₀²·cos²(θ))",
+                                "R = (v₀²·sin(2θ)) / g"
+                            ], note: "Constant horizontal velocity, constant vertical acceleration.")
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                        
                         Spacer()
                         
-                        // Interaction Area
+                        // Interaction
                         ZStack {
-                            // Axis Labels
-                            VStack {
-                                Spacer()
-                                HStack {
-                                    Text("0.00m (ORIGIN)")
-                                        .font(.system(size: 8, design: .monospaced))
-                                        .foregroundColor(neonCyan.opacity(0.4))
-                                        .padding(.leading, 10)
-                                    Spacer()
-                                    Text("R: \(String(format: "%.2f", physicsParams.v0 * physicsParams.v0 * sin(2.0 * physicsParams.angle) / 9.81))m")
-                                        .font(.system(size: 8, design: .monospaced))
-                                        .foregroundColor(neonCyan.opacity(0.4))
-                                        .padding(.trailing, 10)
-                                }
-                            }
-                            
-                            // Target path (blueprint style)
+                            // Target Path (Blueprint)
                             if !targetPoints.isEmpty {
                                 Path { path in
                                     path.move(to: targetPoints[0])
                                     for pt in targetPoints.dropFirst() { path.addLine(to: pt) }
                                 }
-                                .stroke(
-                                    neonCyan.opacity(0.2),
-                                    style: StrokeStyle(lineWidth: 12, lineCap: .round)
-                                )
+                                .stroke(neonCyan.opacity(0.1), style: StrokeStyle(lineWidth: 16, lineCap: .round))
                                 
                                 Path { path in
                                     path.move(to: targetPoints[0])
                                     for pt in targetPoints.dropFirst() { path.addLine(to: pt) }
                                 }
-                                .stroke(
-                                    neonOrange.opacity(0.8),
-                                    style: StrokeStyle(lineWidth: 2, dash: [5, 5])
-                                )
+                                .stroke(neonOrange.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [8, 8]))
                                 
-                                // Vertex indicator
                                 if let vertex = targetPoints.max(by: { $0.y > $1.y }) {
-                                    Circle()
-                                        .stroke(neonOrange, lineWidth: 1)
-                                        .frame(width: 8, height: 8)
-                                        .position(vertex)
-                                    Text("VERTEX")
-                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                        .foregroundColor(neonOrange)
-                                        .position(x: vertex.x, y: vertex.y - 12)
+                                    VStack(spacing: 2) {
+                                        Image(systemName: "triangle.fill").font(.system(size: 8)).foregroundColor(neonOrange)
+                                        Text("PEAK_Y").font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(neonOrange)
+                                    }
+                                    .position(x: vertex.x, y: vertex.y - 12)
                                 }
                             }
                             
-                            // User path
+                            // Draw path
                             if userPath.count > 1 {
                                 Path { path in
                                     path.move(to: userPath[0])
                                     for pt in userPath.dropFirst() { path.addLine(to: pt) }
                                 }
-                                .stroke(neonCyan, style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
-                                .shadow(color: neonCyan.opacity(0.8), radius: 4)
+                                .stroke(
+                                    LinearGradient(colors: [neonCyan, .blue], startPoint: .top, endPoint: .bottom),
+                                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
+                                )
+                                .shadow(color: neonCyan.opacity(0.6), radius: 6)
                             }
                             
-                            // Result overlay
+                            if isDrawing, let last = userPath.last {
+                                Circle()
+                                    .fill(neonCyan)
+                                    .frame(width: 8, height: 8)
+                                    .position(last)
+                                    .scaleEffect(drawPulse ? 1.5 : 1.0)
+                                    .opacity(drawPulse ? 0.3 : 1.0)
+                                    .onAppear { withAnimation(.easeInOut(duration: 0.3).repeatForever()) { drawPulse = true } }
+                            }
+                            
                             if showResult {
-                                ResultOverlay(
-                                    accuracy: accuracy,
-                                    onNext: nextLevel,
-                                    onRetry: retry
-                                )
-                                .transition(.scale.combined(with: .opacity))
+                                ResultOverlay(accuracy: accuracy, onNext: nextLevel, onRetry: retry)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                         }
                         .contentShape(Rectangle())
@@ -171,7 +154,7 @@ struct TrajectoryGameView: View {
                                         if !isDrawing {
                                             userPath = [v.location]
                                             isDrawing = true
-                                            updateLog("INPUT_DETECTED: CAPTURING_VECTOR")
+                                            updateLog("CAPTURE: IN_PROGRESS")
                                         } else {
                                             userPath.append(v.location)
                                         }
@@ -180,7 +163,7 @@ struct TrajectoryGameView: View {
                                 .onEnded { _ in
                                     if isDrawing && !showResult {
                                         isDrawing = false
-                                        updateLog("ANALYTIC_COMPLETION: CALCULATING_ERROR")
+                                        updateLog("ANALYTIC: COMPUTING")
                                         calculateScore()
                                     }
                                 }
@@ -189,7 +172,6 @@ struct TrajectoryGameView: View {
                 }
             }
         }
-        .animation(.spring(), value: showResult)
     }
     
     private func updateLog(_ msg: String) {
@@ -209,74 +191,64 @@ struct TrajectoryGameView: View {
             samples += 1
         }
         let avgDist = totalDist / Double(samples)
-        let norm = canvasSize.width / 320.0
-        accuracy = max(0, min(1.0, 1.0 - avgDist / (40.0 * norm)))
+        accuracy = max(0, min(1.0, 1.0 - avgDist / 45.0))
         
         let pts = Int(accuracy * 100) * level
         totalScore += pts
         score = totalScore
-        updateLog("SCORE_MATRIX: \(pts) | ACC: \(Int(accuracy * 100))%")
+        updateLog("RESULT: \(Int(accuracy * 100))% MATCH")
         
         if accuracy > 0.6 { streak += 1 } else { streak = 0 }
-        showResult = true
+        withAnimation(.spring()) { showResult = true }
     }
     
-    private func dist(_ a: CGPoint, _ b: CGPoint) -> Double {
-        sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2))
-    }
-    
-    private func nextLevel() {
-        level = min(level + 1, 5)
-        retry()
-        updateLog("LEVEL_UP: PARAMETERS_RECONFIGURED")
-    }
-    
-    private func retry() {
-        userPath = []
-        showResult = false
-        accuracy = 0
-    }
+    private func dist(_ a: CGPoint, _ b: CGPoint) -> Double { sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2)) }
+    private func nextLevel() { level = min(level + 1, 10); retry() }
+    private func retry() { userPath = []; showResult = false; accuracy = 0; updateLog("SIM_RECALIBRATED") }
 }
 
-// MARK: - Scientist HUD Components
-
-@available(iOS 16.0, *)
 struct ScientificHUDOverlay: View {
     let level: Int
     let params: (v0: Double, angle: Double)
     let logs: [String]
-    
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
         HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
-                Label("KINEMATIC_VARS", systemImage: "function")
-                    .font(.system(size: 8, weight: .bold, design: .monospaced))
-                    .foregroundColor(neonCyan)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 6) {
+                    Image(systemName: "cpu").font(.system(size: 10)).foregroundColor(neonCyan)
+                    Text("EXP_VARS").font(.system(size: 8, weight: .black, design: .monospaced)).foregroundColor(.white.opacity(0.6))
+                }
                 
-                HUDDataRow(label: "V_INIT", value: "\(String(format: "%.2f", params.v0)) m/s")
-                HUDDataRow(label: "THETA", value: "45.00°")
-                HUDDataRow(label: "GRAVITY", value: "-9.81 m/s²")
+                VStack(alignment: .leading, spacing: 6) {
+                    HUDDataRow(label: "V_INIT", value: "\(String(format: "%.1f", params.v0)) m/s")
+                    HUDDataRow(label: "THETA", value: "45.0°")
+                    HUDDataRow(label: "GRAVITY", value: "-9.81 m/s²")
+                }
+                .padding(10)
+                .background(Color.white.opacity(0.04))
+                .cornerRadius(10)
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(neonCyan.opacity(0.2), lineWidth: 1))
             }
-            .padding(10)
-            .background(Color.black.opacity(0.4))
-            .border(neonCyan.opacity(0.3), width: 1)
             
             Spacer()
             
-            VStack(alignment: .trailing, spacing: 4) {
-                Text("NEURAL_LINK: ACTIVE")
-                    .font(.system(size: 7, weight: .bold, design: .monospaced))
-                    .foregroundColor(.green)
-                
-                ForEach(logs, id: \.self) { log in
-                    Text("> \(log)")
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundColor(neonCyan.opacity(0.7))
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(spacing: 4) {
+                    Circle().fill(Color.green).frame(width: 4, height: 4)
+                    Text("LIVE_FEED").font(.system(size: 7, weight: .bold, design: .monospaced)).foregroundColor(.green)
                 }
+                
+                VStack(alignment: .trailing, spacing: 4) {
+                    ForEach(logs, id: \.self) { log in
+                        Text("> \(log)")
+                            .font(.system(size: 8, design: .monospaced))
+                            .foregroundColor(neonCyan.opacity(0.6))
+                    }
+                }
+                .frame(width: 140, alignment: .trailing)
             }
-            .frame(width: 150, alignment: .trailing)
         }
     }
 }

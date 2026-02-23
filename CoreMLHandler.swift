@@ -8,7 +8,6 @@ import UIKit
 /// Handles object detection using Vision framework's built-in detectors.
 /// All processing happens locally on the Neural Engine — 100% offline.
 @available(macOS 11.0, *)
-@available(iOS 16.0, *)
 class CoreMLHandler: ObservableObject {
     @Published var detectedRectangles: [VNRectangleObservation] = []
     @Published var detectedContours: [VNContoursObservation] = []

@@ -1,12 +1,9 @@
-#if os(iOS)
 import SwiftUI
 
 // MARK: - Elastic Collision Game
 // Concept: Conservation of Energy (KE) and Momentum. 
 // Perfectly elastic collision: Both kinetic energy and momentum are conserved.
 
-@available(iOS 16.0, *)
-@MainActor
 struct CollisionGameView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var score: Int
@@ -28,12 +25,14 @@ struct CollisionGameView: View {
     @State private var streak = 0
     @State private var totalScore = 0
     @State private var thinkingLog: [String] = ["SYS_INIT: COLLISION_LAB", "ANALYZING_ELASTIC_MODULUS"]
-    @State private var timer: Timer?
     @State private var energyTransferred: Double = 0
+    @State private var canvasWidth: CGFloat = 300
+    @State private var curV1: Double = 0
+    @State private var curV2: Double = 0
     
     private var targetZone: (x: CGFloat, width: CGFloat) {
-        let x = 280 + CGFloat(level) * 15
-        return (x, 50.0)
+        let x = 200 + CGFloat(level) * 15
+        return (x, max(30, 60.0 - CGFloat(level) * 5))
     }
     
     var body: some View {
@@ -48,100 +47,143 @@ struct CollisionGameView: View {
                     score: totalScore,
                     streak: streak,
                     onDismiss: { dismiss() },
-                    onHint: { showHint.toggle() }
+                    onHint: { withAnimation { showHint.toggle() } }
                 )
                 
-                GeometryReader { geo in
-                    ZStack {
+                ZStack {
+                    GeometryReader { geo in
                         GridBackground(color: neonPurple, size: geo.size)
-                        
-                        VStack(spacing: 0) {
-                            // Energy Diagnostics
+                            .onAppear { canvasWidth = geo.size.width }
+                    }
+                    
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 24) {
+                            if showHint {
+                                FormulaCard(
+                                    lines: [
+                                        "v₂' = (2m₁) / (m₁+m₂) * v₁",
+                                        "KE = ½mv²"
+                                    ],
+                                    note: "In a perfectly elastic collision, no kinetic energy is lost. Both momentum and KE are conserved."
+                                )
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                            }
+                            
+                            // Energy Diagnostics HUD
                             HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text("ENERGY_MONITOR")
-                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                        .foregroundColor(neonPurple)
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "bolt.horizontal.circle")
+                                            .foregroundColor(neonPurple)
+                                        Text("ENERGY_MONITOR").font(.system(size: 8, weight: .black, design: .monospaced)).foregroundColor(.gray)
+                                    }
                                     
-                                    HUDDataRow(label: "INIT_KE", value: String(format: "%.1f J", 0.5 * m1 * v1 * v1))
-                                    HUDDataRow(label: "TARGET_M", value: String(format: "%.1f kg", m2))
-                                    HUDDataRow(label: "STATUS", value: isSimulating ? "COMPUTING" : "STABLE")
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        HUDDataRow(label: "INIT_KE", value: String(format: "%.1f J", 0.5 * m1 * v1 * v1))
+                                        HUDDataRow(label: "VEL_A (cur)", value: String(format: "%.1f m/s", isSimulating ? curV1 : v1))
+                                        HUDDataRow(label: "VEL_B (cur)", value: String(format: "%.1f m/s", isSimulating ? curV2 : 0))
+                                    }
+                                    .padding(10)
+                                    .background(Color.white.opacity(0.04))
+                                    .cornerRadius(10)
+                                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(neonPurple.opacity(0.2), lineWidth: 1))
                                 }
-                                .padding(10)
-                                .background(Color.black.opacity(0.4))
-                                .border(neonPurple.opacity(0.3), width: 1)
                                 
                                 Spacer()
                                 
-                                VStack(alignment: .trailing, spacing: 4) {
+                                VStack(alignment: .trailing, spacing: 6) {
+                                    Text("STATUS: " + (isSimulating ? "COMPUTING" : "STABLE"))
+                                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                        .foregroundColor(isSimulating ? neonYellow : .green)
                                     ForEach(thinkingLog, id: \.self) { log in
                                         Text("> \(log)")
                                             .font(.system(size: 8, design: .monospaced))
                                             .foregroundColor(neonPurple.opacity(0.7))
                                     }
                                 }
-                                .frame(width: 150, alignment: .trailing)
+                                .frame(width: 140, alignment: .trailing)
                             }
-                            .padding(16)
-                            
-                            if showHint {
-                                FormulaCard(
-                                    lines: ["v₂' = (2m₁) / (m₁+m₂) * v₁", "KE = ½mv²"],
-                                    note: "In a perfectly elastic collision, no kinetic energy is lost to heat or sound."
-                                )
-                                .transition(.move(edge: .top).combined(with: .opacity))
-                            }
-                            
-                            Spacer()
+                            .padding(.horizontal, 16)
                             
                             // Particle Track
                             ZStack(alignment: .leading) {
-                                // Zone
+                                // Base Line
                                 Rectangle()
-                                    .fill(neonPurple.opacity(0.2))
+                                    .fill(LinearGradient(colors: [.clear, neonPurple.opacity(0.3), .clear], startPoint: .leading, endPoint: .trailing))
+                                    .frame(height: 2)
+                                    .offset(y: 30)
+                                
+                                // Target Zone
+                                Rectangle()
+                                    .fill(neonYellow.opacity(0.15))
                                     .frame(width: targetZone.width, height: 60)
-                                    .overlay(Rectangle().stroke(neonPurple, lineWidth: 1))
+                                    .overlay(Rectangle().stroke(neonYellow.opacity(0.5), lineWidth: 1))
+                                    .overlay(
+                                        Text("ACCEPTABLE_RANGE")
+                                            .font(.system(size: 6, weight: .bold, design: .monospaced))
+                                            .foregroundColor(neonYellow)
+                                            .offset(y: 40)
+                                    )
                                     .offset(x: targetZone.x, y: 0)
                                 
                                 // Particle 2
-                                CollisionParticle(color: neonPurple, mass: m2, label: "ION_B")
+                                CollisionParticle(color: neonYellow, mass: m2, label: "ION_B")
                                     .offset(x: pos2, y: 0)
                                 
                                 // Particle 1
                                 CollisionParticle(color: neonCyan, mass: m1, label: "ION_A")
                                     .offset(x: pos1, y: 0)
+                                    .overlay(
+                                        // Velocity Vector Arrow
+                                        HStack(spacing: 0) {
+                                            Rectangle().fill(neonCyan).frame(width: CGFloat(v1 * 2), height: 2)
+                                            Image(systemName: "play.fill").font(.system(size: 8)).foregroundColor(neonCyan).offset(x: -2)
+                                        }
+                                        .offset(x: 15 + CGFloat(v1), y: 0)
+                                        .opacity(isSimulating || v1 == 0 ? 0 : 1)
+                                    )
                             }
                             .frame(height: 100)
-                            .padding(.horizontal, 20)
-                            
-                            Spacer()
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
                             
                             // Control Panel
-                            VStack(spacing: 16) {
-                                HStack(spacing: 15) {
-                                    ScientificSlider(label: "ION_A_MASS", value: $m1, range: 1...10, unit: "u", color: neonCyan)
-                                    ScientificSlider(label: "ION_B_MASS", value: $m2, range: 1...10, unit: "u", color: neonPurple)
-                                }
-                                ScientificSlider(label: "INITIAL_VELOCITY", value: $v1, range: 5...25, unit: "m/s", color: neonCyan)
+                            VStack(spacing: 20) {
+                                ScientificSlider(label: "ION_A_MASS (u)", value: $m1, range: 1...10, unit: "u", color: neonCyan)
+                                ScientificSlider(label: "ION_B_MASS (u)", value: $m2, range: 1...10, unit: "u", color: neonYellow)
+                                ScientificSlider(label: "INITIAL_VELOCITY (m/s)", value: $v1, range: 5...25, unit: "m/s", color: neonCyan)
                                 
-                                Button(action: executeCollision) {
-                                    Text(isSimulating ? "SIMULATING..." : "GENERATE COLLISION")
-                                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                if !showResult {
+                                    Button(action: executeCollision) {
+                                        HStack {
+                                            Image(systemName: isSimulating ? "network" : "bolt.horizontal.fill")
+                                            Text(isSimulating ? "SIMULATING_IMPACT..." : "GENERATE_COLLISION")
+                                        }
+                                        .font(.system(size: 14, weight: .black, design: .monospaced))
                                         .foregroundColor(.black)
-                                        .padding(.vertical, 14)
                                         .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 18)
                                         .background(isSimulating ? Color.gray : neonPurple)
-                                        .cornerRadius(10)
+                                        .cornerRadius(14)
+                                        .shadow(color: isSimulating ? .clear : neonPurple.opacity(0.4), radius: 10)
+                                    }
+                                    .disabled(isSimulating)
                                 }
-                                .disabled(isSimulating)
                             }
                             .padding(20)
-                            .background(Color.black.opacity(0.6))
+                            .background(Color.white.opacity(0.04))
+                            .cornerRadius(24)
+                            .padding(.horizontal, 16)
+                            
+                            if showResult {
+                                ResultOverlay(accuracy: accuracy, onNext: nextLevel, onRetry: resetParams)
+                                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                                    .padding(.horizontal, 16)
+                            }
+                            
+                            Spacer().frame(height: 40)
                         }
-                        
-                        if showResult {
-                            ResultOverlay(accuracy: accuracy, onNext: nextLevel, onRetry: reset)
-                        }
+                        .padding(.top, 20)
                     }
                 }
             }
@@ -150,15 +192,18 @@ struct CollisionGameView: View {
     
     private func executeCollision() {
         isSimulating = true
+        showResult = false
         updateLog("ION_A_LAUNCHED: \(String(format: "%.1f", v1)) m/s")
+        curV1 = v1
+        curV2 = 0
         
-        var curV1 = v1
-        var curV2: Double = 0
-        let dt = 0.04
-        
-        timer = Timer.scheduledTimer(withTimeInterval: dt, repeats: true) { _ in
-            Task { @MainActor in
-                withAnimation(.linear(duration: dt)) {
+        Task { @MainActor in
+            let _ = 0.04
+            while isSimulating {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+                guard !Task.isCancelled && isSimulating else { break }
+                
+                withAnimation(.linear(duration: 0.03)) {
                     if self.pos1 + 30 < self.pos2 {
                         self.pos1 += CGFloat(curV1 * 1.5)
                     } else if curV2 == 0 {
@@ -168,16 +213,18 @@ struct CollisionGameView: View {
                         
                         curV1 = v1_final
                         curV2 = v2_final
-                        self.updateLog("ELASTIC_IMPACT: ENERGY_TRANSFERRED")
+                        self.updateLog("ELASTIC_IMPACT: ENERGY_EXCHANGED")
                     } else {
                         self.pos2 += CGFloat(curV2 * 1.5)
                         self.pos1 += CGFloat(curV1 * 1.5)
                         
-                        curV2 *= 0.99
-                        curV1 *= 0.99
+                        curV2 *= 0.985
+                        curV1 *= 0.985
                         
-                        if abs(curV2) < 0.2 && abs(curV1) < 0.2 {
-                            self.timer?.invalidate()
+                        let isStopped = abs(curV2) < 0.2 && abs(curV1) < 0.2
+                        let isOutOfBounds = self.pos2 > canvasWidth || self.pos1 > canvasWidth || self.pos1 < -30
+                        
+                        if isStopped || isOutOfBounds {
                             self.evaluate()
                         }
                     }
@@ -187,32 +234,41 @@ struct CollisionGameView: View {
     }
     
     private func evaluate() {
+        isSimulating = false
         let finalPos = pos2 + 15
         let center = targetZone.x + targetZone.width / 2
+        let maxDist = targetZone.width / 2 + 20
         let diff = abs(finalPos - center)
         
-        accuracy = max(0, min(1.0, 1.0 - Double(diff / 80.0)))
-        
+        accuracy = max(0, min(1.0, 1.0 - Double(diff / maxDist)))
         let pts = Int(accuracy * 100) * level
         totalScore += pts
         score = totalScore
         
-        if accuracy > 0.8 { streak += 1 } else { streak = 0 }
-        showResult = true
-        isSimulating = false
+        if accuracy > 0.7 {
+            streak += 1
+            updateLog("SUCCESS: OPTIMAL_ELASTICITY")
+        } else {
+            streak = 0
+            updateLog("FAILURE: TARGET_MISSED")
+        }
+        
+        withAnimation(.spring()) { showResult = true }
     }
     
     private func nextLevel() {
-        level = min(level + 1, 5)
-        reset()
+        level = min(level + 1, 10)
+        resetParams()
     }
     
-    private func reset() {
+    private func resetParams() {
         pos1 = 50
         pos2 = 200
-        showResult = false
+        withAnimation { showResult = false }
         accuracy = 0
         isSimulating = false
+        curV1 = 0
+        curV2 = 0
         updateLog("CORE_STABILIZED: READY")
     }
     
@@ -224,33 +280,44 @@ struct CollisionGameView: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct CollisionParticle: View {
     let color: Color
     let mass: Double
     let label: String
     
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .fill(color.opacity(0.1))
+                    .fill(color.opacity(0.15))
                     .frame(width: 30, height: 30)
                 Circle()
                     .stroke(color, lineWidth: 2)
                     .frame(width: 30, height: 30)
+                    .shadow(color: color.opacity(0.5), radius: 6)
                 
                 // Spark effect
                 Circle()
-                    .fill(color.opacity(0.3))
-                    .frame(width: 10, height: 10)
-                    .blur(radius: 5)
+                    .fill(color.opacity(0.4))
+                    .frame(width: 8, height: 8)
+                    .blur(radius: 4)
+                
+                Text("\(Int(mass))u")
+                    .font(.system(size: 8, weight: .black, design: .monospaced))
+                    .foregroundColor(color)
+                    .offset(y: 22)
             }
+            
             Text(label)
                 .font(.system(size: 7, weight: .bold, design: .monospaced))
-                .foregroundColor(color)
+                .foregroundColor(color.opacity(0.8))
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(Color.black.opacity(0.6))
+                .cornerRadius(4)
+                .offset(y: 10)
         }
     }
 }
 
-#endif
+

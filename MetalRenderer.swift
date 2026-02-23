@@ -5,7 +5,6 @@ import simd
 /// Metal renderer for potential future use.
 /// Currently, neon glow effects are handled by SceneKit's bloom technique
 /// in KineprintARView, which integrates directly with the AR pipeline.
-@available(iOS 16.0, *)
 class MetalRenderer {
     private var device: MTLDevice?
     private var commandQueue: MTLCommandQueue?

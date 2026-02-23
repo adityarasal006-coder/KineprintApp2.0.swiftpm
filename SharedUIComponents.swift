@@ -1,49 +1,45 @@
 import SwiftUI
 
-// MARK: - Shared Robotics Branding system
+// MARK: - Shared Core Branding system
 
-public enum RobotType: String, CaseIterable, Identifiable {
-    case scout, warrior, titan, core, drone, spark, android, nexus
-    case robot1, robot2, robot3, robot4 // Legacy aliases for AppStorage compatibility
+public enum CoreShape: String, CaseIterable, Identifiable {
+    case sphere, tetrahedron, torus, helix, icosahedron, box
+    case robot1, robot2, robot3, robot4, scout, warrior, titan, core, drone, spark, android, nexus
     
     public var id: String { self.rawValue }
     
     public var icon: String {
         switch self {
-        case .scout, .robot1: return "robot"
-        case .warrior, .robot2: return "shield.machine.fill"
-        case .titan, .robot3: return "cpu.fill"
-        case .core, .robot4: return "atom"
-        case .drone: return "airplane.arrival"
-        case .spark: return "bolt.shield.fill"
-        case .android: return "brain.head.profile"
-        case .nexus: return "square.stack.3d.up.fill"
+        case .sphere, .robot1, .scout: return "circle.fill"
+        case .tetrahedron, .robot2, .warrior: return "triangle.fill"
+        case .torus, .robot3, .titan: return "largecircle.fill.circle"
+        case .helix, .robot4, .core: return "infinity.circle.fill"
+        case .icosahedron, .drone, .spark: return "hexagon.fill"
+        case .box, .android, .nexus: return "square.fill"
         }
     }
     
-    public var imageName: String {
+    public var name: String {
         switch self {
-        case .scout, .robot1: return "robot_1"
-        case .warrior, .robot2: return "robot_2"
-        case .titan, .robot3: return "robot_3"
-        case .core, .robot4: return "robot_4"
-        case .drone: return "robot_1"
-        case .spark: return "robot_2"
-        case .android: return "robot_3"
-        case .nexus: return "robot_4"
+        case .sphere, .robot1, .scout: return "Quantum Orb"
+        case .tetrahedron, .robot2, .warrior: return "Singularity Point"
+        case .torus, .robot3, .titan: return "Energy Torus"
+        case .helix, .robot4, .core: return "DNA Helix Core"
+        case .icosahedron, .drone, .spark: return "Icosahedron"
+        case .box, .android, .nexus: return "Tesseract"
         }
     }
     
-    public static var allModels: [RobotType] {
-        return [.scout, .warrior, .titan, .core, .drone, .spark, .android, .nexus]
+    public static var allModels: [CoreShape] {
+        return [.sphere, .tetrahedron, .torus, .helix, .icosahedron, .box]
     }
 }
 
-public struct RobotDisplayView: View {
-    public let type: RobotType
+public struct CoreDisplayView: View {
+    public let type: CoreShape
     public let color: Color
     
-    public init(type: RobotType, color: Color) {
+    public init(type: CoreShape, color: Color) {
         self.type = type
         self.color = color
     }
@@ -60,25 +56,13 @@ public struct RobotDisplayView: View {
                 .stroke(color.opacity(0.4), lineWidth: 1)
                 .padding(4)
             
-            // The Actual Robot Cutout
-            // Using a blend trick to remove the white background from the generated images
-            Image(type.imageName)
+            // Abstract Core Icon
+            Image(systemName: type.icon)
                 .resizable()
                 .scaledToFit()
-                .padding(15)
-                .colorInvert() // Background White -> Black
-                .blendMode(.screen) // Black becomes transparent, artwork stays visible
+                .padding(25)
+                .foregroundColor(color)
                 .shadow(color: color.opacity(0.8), radius: 10)
-                .overlay(
-                    // Inner Glow based on the chosen color
-                    Image(type.imageName)
-                        .resizable()
-                        .scaledToFit()
-                        .padding(15)
-                        .colorInvert()
-                        .blendMode(.screen)
-                        .colorMultiply(color.opacity(0.8))
-                )
         }
     }
 }
@@ -130,5 +114,84 @@ extension Color {
         uic.getRed(&r, green: &g, blue: &b, alpha: &a)
         let rgb: Int = (Int)(r*255)<<16 | (Int)(g*255)<<8 | (Int)(b*255)<<0
         return String(format: "#%06x", rgb)
+    }
+}
+
+// MARK: - Core Identity Circle
+public struct CoreIdentityCircle: View {
+    public let avatarType: CoreShape
+    public let avatarColor: Color
+    public let backgroundTheme: AvatarBackgroundTheme
+    public let size: CGFloat
+    
+    @State private var radarRotation: Double = 0
+    
+    public init(avatarType: CoreShape, avatarColor: Color, backgroundTheme: AvatarBackgroundTheme, size: CGFloat = 200) {
+        self.avatarType = avatarType
+        self.avatarColor = avatarColor
+        self.backgroundTheme = backgroundTheme
+        self.size = size
+    }
+    
+    public var body: some View {
+        ZStack {
+            // Ambient glow matching avatar color
+            RadialGradient(
+                gradient: Gradient(colors: [avatarColor.opacity(0.3), .clear]),
+                center: .center,
+                startRadius: size * 0.1,
+                endRadius: size * 0.75
+            )
+            .frame(width: size * 1.5, height: size * 1.5)
+            
+            // Outer ring system
+            Circle()
+                .stroke(avatarColor.opacity(0.2), lineWidth: 1)
+                .frame(width: size * 1.25, height: size * 1.25)
+                .rotationEffect(.degrees(radarRotation / 2))
+                
+            // Tick marks
+            Circle()
+                .stroke(avatarColor.opacity(0.5), style: StrokeStyle(lineWidth: 2, dash: [4, 16]))
+                .frame(width: size * 1.15, height: size * 1.15)
+                .rotationEffect(.degrees(-radarRotation))
+            
+            // Scanner sweep
+            if size > 100 { // Only show sweep on larger versions
+                Circle()
+                    .trim(from: 0, to: 0.25)
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [.clear, avatarColor.opacity(0.8)]),
+                            center: .center,
+                            startAngle: .degrees(0),
+                            endAngle: .degrees(360)
+                        ),
+                        style: StrokeStyle(lineWidth: max(2, size * 0.02), lineCap: .round)
+                    )
+                    .frame(width: size * 1.3, height: size * 1.3)
+                    .rotationEffect(.degrees(radarRotation))
+            }
+            
+            // The User's Background Theme (clipped perfectly inside the circle!)
+            AvatarBackgroundEngine(theme: backgroundTheme, color: avatarColor)
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            
+            // The user's specific Neural Identity Core
+            Avatar3DView(avatarType: avatarType, avatarColor: avatarColor, isExpanded: false)
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+            
+            // Glass reflections over the top
+            Circle()
+                .stroke(LinearGradient(colors: [.white.opacity(0.5), .clear, .clear, .clear], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
+                .frame(width: size, height: size)
+        }
+        .onAppear {
+            withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
+                radarRotation = 360
+            }
+        }
     }
 }

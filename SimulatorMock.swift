@@ -3,11 +3,10 @@ import Foundation
 import SwiftUI
 import simd
 
-@available(iOS 16.0, *)
 @MainActor
 class SimulatorMock {
     static let shared = SimulatorMock()
-    private var timer: Timer?
+    private var isMocking = false
     private var time: Float = 0
     weak var viewModel: KineprintViewModel?
     
@@ -15,17 +14,18 @@ class SimulatorMock {
         self.viewModel = viewModel
         viewModel.startTrackingObject(at: SIMD3<Float>(0, 0, -1))
         
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.updateMock()
+        isMocking = true
+        Task { @MainActor in
+            while isMocking {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                guard !Task.isCancelled && isMocking else { break }
+                self.updateMock()
             }
         }
     }
     
     func stopMocking() {
-        timer?.invalidate()
-        timer = nil
+        isMocking = false
     }
     
     private func updateMock() {

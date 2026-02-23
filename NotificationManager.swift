@@ -2,7 +2,6 @@
 import Foundation
 import UserNotifications
 
-@available(iOS 16.0, *)
 class NotificationManager: ObservableObject {
     static let shared = NotificationManager()
     

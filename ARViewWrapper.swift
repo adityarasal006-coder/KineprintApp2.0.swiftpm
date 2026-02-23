@@ -1,4 +1,3 @@
-#if os(iOS)
 import SwiftUI
 import ARKit
 import SceneKit
@@ -7,7 +6,6 @@ import AVFoundation
 
 /// Bridges SwiftUI with the custom KineprintARView.
 /// Handles tap-to-track: user taps a surface to place a tracking anchor.
-@available(iOS 16.0, *)
 @MainActor
 final class KineprintARViewWrapper: UIView {
     private var kineprintARView: KineprintARView?
@@ -124,7 +122,6 @@ final class KineprintARViewWrapper: UIView {
     }
 }
 
-@available(iOS 16.0, *)
 struct ARCameraView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var cameraAuthorized = false
@@ -197,7 +194,6 @@ struct ARCameraView: View {
 }
 
 
-@available(iOS 16.0, *)
 struct ARCameraViewController: UIViewRepresentable {
     @ObservedObject var viewModel: KineprintViewModel
     
@@ -233,13 +229,12 @@ struct ARCameraViewController: UIViewRepresentable {
     }
 }
 
-@available(iOS 16.0, *)
 struct LiveTargetReticleOverlay: View {
     @ObservedObject var viewModel: KineprintViewModel
     
     @State private var rotatingAngle: Double = 0
     @State private var scanLineOffset: CGFloat = -125
-    @State private var timer: Timer?
+    @State private var isAnimatingOverlay = false
     @State private var liveAngleX: Int = 0
     @State private var liveAngleY: Int = 0
     @State private var liveDepth: Double = 0.0
@@ -332,6 +327,7 @@ struct LiveTargetReticleOverlay: View {
             }
         }
         .onAppear {
+            isAnimatingOverlay = true
             withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) {
                 rotatingAngle = 360
             }
@@ -341,18 +337,23 @@ struct LiveTargetReticleOverlay: View {
             
             let textures = ["METALLIC_ALLOY", "CARBON_POLYMER", "SILICATE_MATRIX", "SYNTHETIC_FIBER", "BIO_CELLULAR", "COMPOSITE_GEN-4"]
             
-            timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
-                liveAngleX = Int.random(in: -45...45)
-                liveAngleY = Int.random(in: -45...45)
-                liveDepth = Double.random(in: 0.3...3.5)
-                if Int.random(in: 0...4) == 0 {
-                    liveTexture = textures.randomElement() ?? "SCANNING..."
+            Task { @MainActor in
+                while isAnimatingOverlay {
+                    try? await Task.sleep(nanoseconds: 400_000_000) // 0.4s
+                    guard !Task.isCancelled && isAnimatingOverlay else { break }
+                    
+                    liveAngleX = Int.random(in: -45...45)
+                    liveAngleY = Int.random(in: -45...45)
+                    liveDepth = Double.random(in: 0.3...3.5)
+                    if Int.random(in: 0...4) == 0 {
+                        liveTexture = textures.randomElement() ?? "SCANNING..."
+                    }
                 }
             }
         }
         .onDisappear {
-            timer?.invalidate()
+            isAnimatingOverlay = false
         }
     }
 }
-#endif
+

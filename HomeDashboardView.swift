@@ -1,11 +1,8 @@
-#if os(iOS)
 import SwiftUI
 
-@available(iOS 16.0, *)
 struct HomeDashboardView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var showingResearch = false
-    @State private var radarRotation: Double = 0
     
     private let draftBlue = Color(red: 0.02, green: 0.08, blue: 0.15)
     private let neonCyan = Color(red: 0.0, green: 0.85, blue: 1.0)
@@ -54,46 +51,30 @@ struct HomeDashboardView: View {
                     .padding(.horizontal, 20)
 
                     // Central Radar / Core System Monitor
-                    ZStack {
-                        // Outer ring
-                        Circle()
-                            .stroke(neonCyan.opacity(0.2), lineWidth: 1)
-                            .frame(width: 220, height: 220)
+                    VStack(spacing: 24) {
+                        CoreIdentityCircle(
+                            avatarType: viewModel.avatarType,
+                            avatarColor: viewModel.avatarColor,
+                            backgroundTheme: viewModel.backgroundTheme,
+                            size: 200
+                        )
                         
-                        // Tick marks
-                        Circle()
-                            .stroke(neonCyan.opacity(0.5), style: StrokeStyle(lineWidth: 4, dash: [4, 16]))
-                            .frame(width: 200, height: 200)
-                        
-                        // Radar Sweep
-                        Circle()
-                            .trim(from: 0, to: 0.2)
-                            .stroke(
-                                AngularGradient(
-                                    gradient: Gradient(colors: [.clear, neonCyan]),
-                                    center: .center,
-                                    startAngle: .degrees(0),
-                                    endAngle: .degrees(360)
-                                ),
-                                style: StrokeStyle(lineWidth: 30, lineCap: .butt)
-                            )
-                            .frame(width: 170, height: 170)
-                            .rotationEffect(.degrees(radarRotation))
-                        
-                        // Inner content
-                        VStack(spacing: 4) {
-                            Image(systemName: "cpu")
-                                .font(.system(size: 32))
+                        // Core status
+                        VStack(spacing: 2) {
+                            Text("NEURAL LINK: \(viewModel.avatarType.name.uppercased())")
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
                                 .foregroundColor(starkWhite)
-                            Text("CORE")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(neonCyan)
-                            Text("84%")
-                                .font(.system(size: 18, weight: .heavy, design: .monospaced))
-                                .foregroundColor(starkWhite)
+                            Text("SYNCED: 100%")
+                                .font(.system(size: 14, weight: .heavy, design: .monospaced))
+                                .foregroundColor(viewModel.avatarColor)
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(viewModel.avatarColor.opacity(0.5), lineWidth: 1))
                     }
-                    .padding(.vertical, 20)
+                    .padding(.vertical, 10)
                     
                     // Diagnostics Grid
                     HStack(spacing: 16) {
@@ -170,18 +151,12 @@ struct HomeDashboardView: View {
                 .padding(.top, 20)
             }
         }
-        .onAppear {
-            withAnimation(.linear(duration: 4).repeatForever(autoreverses: false)) {
-                radarRotation = 360
-            }
-        }
         .sheet(isPresented: $showingResearch) {
              ResearchLibraryView(viewModel: viewModel)
         }
     }
 }
 
-@available(iOS 16.0, *)
 struct DiagnosticWidget: View {
     let title: String
     let value: String
@@ -215,7 +190,6 @@ struct DiagnosticWidget: View {
     }
 }
 
-@available(iOS 16.0, *)
 struct SystemLogEntry: View {
     let time: String
     let msg: String
@@ -245,4 +219,4 @@ struct SystemLogEntry: View {
         .padding(.vertical, 8)
     }
 }
-#endif
+
