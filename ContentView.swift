@@ -3,7 +3,7 @@ import SwiftUI
 #endif
 
 import AudioToolbox
-import ARKit
+
 import SceneKit
 import Metal
 import MetalKit
@@ -18,12 +18,11 @@ import UIKit
 
 // MARK: - App Tabs
 
-
 enum AppTab {
     case home
     case iot
-    case ar
-    case training
+    case calculator
+    case archive
     case profile
 }
 
@@ -33,7 +32,6 @@ enum AppTab {
 struct KineprintView: View {
     @StateObject private var viewModel = KineprintViewModel()
     @State private var selectedTab: AppTab = .home
-    @State private var showingARAnimation = false
     @State private var showExitConfirm = false
     @State private var showGoodbye = false
     private let speechSynth = AVSpeechSynthesizer()
@@ -48,43 +46,31 @@ struct KineprintView: View {
                     .transition(.opacity)
             } else {
                 VStack(spacing: 0) {
-                    if selectedTab != .ar {
-                        TopNavigationBar(viewModel: viewModel, showExitConfirm: $showExitConfirm)
-                    }
+                    TopNavigationBar(viewModel: viewModel, showExitConfirm: $showExitConfirm)
                     
                     ZStack {
                         switch selectedTab {
                         case .home:
                             HomeDashboardView(viewModel: viewModel)
                         case .iot:
-                            IoTControlHubView()
-                        case .ar:
-                            ARScannerTab(viewModel: viewModel)
-                        case .training:
-                            LearningLabView()
+                            EngineeringHubView()
+                        case .calculator:
+                            ScientificCalculatorView()
+                        case .archive:
+                            ResearchLibraryView(viewModel: viewModel)
                         case .profile:
                             ProfileSettingsView()
                         }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     
-                    CustomBottomToolbar(viewModel: viewModel, selectedTab: $selectedTab, startARAnimation: {
-                        showingARAnimation = true
-                    })
+                    CustomBottomToolbar(viewModel: viewModel, selectedTab: $selectedTab)
                 }
-                .disabled(showingARAnimation)
                 .opacity(viewModel.isBooting ? 0 : 1)
                 
                 if viewModel.isBooting {
                     BootSequenceView(viewModel: viewModel)
                         .transition(.opacity)
-                }
-                
-                if showingARAnimation {
-                    AROpeningAnimation {
-                        showingARAnimation = false
-                        selectedTab = .ar
-                    }
                 }
             }
             // Exit Confirmation Overlay
@@ -230,15 +216,15 @@ struct KineprintView: View {
         let utterance = AVSpeechUtterance(string: text)
         
         let voices = AVSpeechSynthesisVoice.speechVoices()
-        // Prioritize "Samantha" or "Alex" for English, or any voice with "premium" or "enhanced"
-        let preferredVoice = voices.first { $0.identifier.contains("premium") || $0.identifier.contains("enhanced") }
-            ?? voices.first { $0.name == "Samantha" }
-            ?? AVSpeechSynthesisVoice(language: "en-US")
+        // Prioritize a Male British Artificial Intelligence Voice
+        let preferredVoice = voices.first { $0.language == "en-GB" && $0.gender == .male }
+            ?? voices.first { $0.language == "en-US" && $0.gender == .male }
+            ?? AVSpeechSynthesisVoice(language: "en-GB")
         
         utterance.voice = preferredVoice
-        utterance.rate = 0.45 // Natural speaking speed
-        utterance.pitchMultiplier = 1.05 // Friendly, approachable tone
-        utterance.volume = 0.9
+        utterance.rate = 0.45 // Natural, deliberate speed
+        utterance.pitchMultiplier = 0.85 // Lower pitch for deep male AI voice
+        utterance.volume = 0.95
         
         // Add a tiny bit of natural phrasing pause
         utterance.postUtteranceDelay = 0.1
@@ -248,200 +234,7 @@ struct KineprintView: View {
 }
 
 
-struct ARScannerTab: View {
-    @ObservedObject var viewModel: KineprintViewModel
 
-    var body: some View {
-        ZStack {
-            ARCameraView(viewModel: viewModel)
-            
-            VStack(spacing: 0) {
-                // Top section: Motion Analysis relocated to the very top
-                MotionAnalysisDashboard(viewModel: viewModel)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 4) // Tight padding for maximum scanner space
-                
-                if viewModel.isScanning {
-                    ScanningLine()
-                }
-                
-                Spacer()
-                
-                // Sidebar controls
-                HStack(alignment: .bottom) {
-                    Spacer()
-                    SidebarControls(viewModel: viewModel)
-                        .padding(.trailing, 12)
-                        .padding(.bottom, 16)
-                }
-                
-                // Bottom section: ONLY capture button so it lowers naturally
-                // The capture button has been naturally migrated to the main tab bar 
-                // See `CustomBottomToolbar`
-            }
-            
-            // Hacker Processing state
-            if viewModel.isHackerProcessing {
-                HackerProcessingAnimationView(viewModel: viewModel)
-                    .transition(.opacity)
-            } else if viewModel.showCapturedBlueprint, let entry = viewModel.lastScannedEntry {
-                BlueprintDisplayView(viewModel: viewModel, entry: entry)
-                    .transition(.opacity)
-            } else if viewModel.isDeepScanning {
-                // Legacy HUD
-                DeepScanHUD(viewModel: viewModel)
-                    .transition(.opacity)
-            }
-        }
-    }
-}
-
-
-struct CustomBottomToolbar: View {
-    @ObservedObject var viewModel: KineprintViewModel
-    @Binding var selectedTab: AppTab
-    var startARAnimation: () -> Void
-    
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
-
-    var body: some View {
-        HStack(spacing: 0) {
-            TabBarButton(icon: "house.fill", label: "HOME", tab: .home, selectedTab: $selectedTab)
-            TabBarButton(icon: "network", label: "IOT HUB", tab: .iot, selectedTab: $selectedTab)
-            
-            Button(action: {
-                if selectedTab == .ar {
-                    viewModel.captureBlueprintImage()
-                } else {
-                    startARAnimation()
-                }
-            }) {
-                ZStack {
-                    Circle()
-                        .fill(neonCyan.opacity(0.1))
-                        .frame(width: 60, height: 60)
-                    Circle()
-                        .stroke(neonCyan, lineWidth: selectedTab == .ar ? 3 : 1)
-                        .frame(width: 60, height: 60)
-                    Image(systemName: selectedTab == .ar ? "camera.viewfinder" : "arkit")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(neonCyan)
-                }
-                .offset(y: -15)
-            }
-            .frame(width: 80)
-            
-            TabBarButton(icon: "graduationcap.fill", label: "TRAIN", tab: .training, selectedTab: $selectedTab)
-            
-            // Profile Tab with Dynamic Avatar
-            Button(action: { selectedTab = .profile }) {
-                VStack(spacing: 4) {
-                    Group {
-                        if let data = viewModel.profileImageData, let uiImage = UIImage(data: data) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 22, height: 22)
-                                .clipShape(Circle())
-                                .overlay(Circle().stroke(viewModel.avatarColor, lineWidth: selectedTab == .profile ? 1.5 : 0))
-                        } else {
-                            Image(systemName: viewModel.avatarType.icon)
-                                .font(.system(size: 18))
-                                .foregroundColor(selectedTab == .profile ? viewModel.avatarColor : .gray)
-                        }
-                    }
-                    Text("PROFILE")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                }
-                .foregroundColor(selectedTab == .profile ? neonCyan : .gray)
-                .frame(maxWidth: .infinity)
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 20)
-        .background(Color.black.opacity(0.85))
-        .overlay(
-            Rectangle()
-                .frame(height: 1)
-                .foregroundColor(neonCyan.opacity(0.3)),
-            alignment: .top
-        )
-    }
-}
-
-
-struct TabBarButton: View {
-    let icon: String
-    let label: String
-    let tab: AppTab
-    @Binding var selectedTab: AppTab
-    
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
-
-    var body: some View {
-        Button(action: {
-            selectedTab = tab
-        }) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                Text(label)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-            }
-            .foregroundColor(selectedTab == tab ? neonCyan : .gray)
-            .frame(maxWidth: .infinity)
-        }
-    }
-}
-
-
-struct AROpeningAnimation: View {
-    var onComplete: () -> Void
-    @State private var scale: CGFloat = 0.1
-    @State private var opacity: Double = 1.0
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
-
-    var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            
-            GeometryReader { geo in
-                Path { path in
-                    path.move(to: CGPoint(x: 0, y: geo.size.height / 2))
-                    path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 2))
-                    path.move(to: CGPoint(x: geo.size.width / 2, y: 0))
-                    path.addLine(to: CGPoint(x: geo.size.width / 2, y: geo.size.height))
-                }
-                .stroke(neonCyan.opacity(0.6), lineWidth: 2)
-            }
-            .scaleEffect(scale)
-            .opacity(opacity)
-            
-            Circle()
-                .stroke(neonCyan, lineWidth: 4)
-                .frame(width: 100, height: 100)
-                .scaleEffect(scale)
-                .opacity(opacity)
-                
-            Text("INITIALIZING SPATIAL MAPPING")
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(neonCyan)
-                .offset(y: 80)
-                .opacity(opacity)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.8)) {
-                scale = 15.0
-                opacity = 0.0
-            }
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                onComplete()
-            }
-        }
-    }
-}
 
 // MARK: - Matrix/Hacker Rain Boot Animation
 
@@ -818,137 +611,9 @@ struct SidebarControls: View {
                         isActive: false,
                         action: { viewModel.clearData() }
                     )
-                    
-                    ControlButton(
-                        symbol: "target",
-                        label: "Scan",
-                        isActive: viewModel.isDeepScanning,
-                        action: { viewModel.initiateDeepScan() }
-                    )
                 }
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
-        }
-    }
-}
-// MARK: - Deep Scan HUD
-
-
-struct DeepScanHUD: View {
-    @ObservedObject var viewModel: KineprintViewModel
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
-    
-    var body: some View {
-        ZStack {
-            Color.black.opacity(0.4).ignoresSafeArea()
-            
-            VStack {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("DEEP SCAN IN PROGRESS")
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(neonCyan)
-                        Text("IDENTIFYING MATERIAL COMPOSITION...")
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundColor(.gray)
-                    }
-                    Spacer()
-                    Text("\(Int(viewModel.deepScanProgress * 100))%")
-                        .font(.system(size: 24, weight: .bold, design: .monospaced))
-                        .foregroundColor(neonCyan)
-                }
-                .padding(20)
-                .background(Color.black.opacity(0.8))
-                
-                Spacer()
-                
-                if let entry = viewModel.lastScannedEntry {
-                    VStack(spacing: 20) {
-                        Text("OBJECT ANALYSIS COMPLETE")
-                            .font(.system(size: 16, weight: .bold, design: .monospaced))
-                            .foregroundColor(.green)
-                            .shadow(color: .green.opacity(0.5), radius: 10)
-                        
-                        HStack(spacing: 30) {
-                            // Blueprint Preview
-                            VStack(spacing: 8) {
-                                Text("BLUEPRINT")
-                                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                    .foregroundColor(.gray)
-                                ZStack {
-                                    Rectangle().stroke(neonCyan.opacity(0.4), lineWidth: 1)
-                                        .frame(width: 120, height: 120)
-                                    // Simulated blueprint lines
-                                    ForEach(0..<4) { i in
-                                        Path { p in
-                                            p.move(to: CGPoint(x: 10, y: 30 * i + 10))
-                                            p.addLine(to: CGPoint(x: 110, y: 30 * i + 10))
-                                        }
-                                        .stroke(neonCyan.opacity(0.2), lineWidth: 0.5)
-                                    }
-                                    Image(systemName: "square.dashed")
-                                        .font(.system(size: 60))
-                                        .foregroundColor(neonCyan.opacity(0.6))
-                                }
-                            }
-                            
-                            // Details
-                            VStack(alignment: .leading, spacing: 12) {
-                                ScanDetailRow(label: "NAME", value: entry.title)
-                                ScanDetailRow(label: "SIZE", value: entry.dimensions)
-                                ScanDetailRow(label: "MAT", value: entry.material)
-                                ScanDetailRow(label: "MASS", value: entry.mass)
-                                ScanDetailRow(label: "QUAL", value: entry.scanQuality)
-                            }
-                        }
-                        .padding(20)
-                        .background(Color.black.opacity(0.85))
-                        .cornerRadius(12)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(neonCyan.opacity(0.3), lineWidth: 1))
-                        
-                        Text("SAVED TO RESEARCH FOLDER")
-                            .font(.system(size: 10, weight: .bold, design: .monospaced))
-                            .foregroundColor(neonCyan.opacity(0.6))
-                    }
-                    .padding(.bottom, 100)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    // Scanning Ring
-                    ZStack {
-                        Circle()
-                            .stroke(neonCyan.opacity(0.2), lineWidth: 2)
-                            .frame(width: 200, height: 200)
-                        Circle()
-                            .trim(from: 0, to: viewModel.deepScanProgress)
-                            .stroke(neonCyan, lineWidth: 4)
-                            .frame(width: 200, height: 200)
-                            .rotationEffect(.degrees(-90))
-                        
-                        Image(systemName: "viewfinder")
-                            .font(.system(size: 60))
-                            .foregroundColor(neonCyan)
-                    }
-                    .padding(.bottom, 140)
-                }
-            }
-        }
-    }
-}
-
-
-struct ScanDetailRow: View {
-    let label: String
-    let value: String
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(.gray)
-            Text(value)
-                .font(.system(size: 12, weight: .bold, design: .monospaced))
-                .foregroundColor(neonCyan)
         }
     }
 }
@@ -1164,18 +829,6 @@ struct ChartDataPoint: Identifiable {
 }
 
 
-struct ResearchEntry: Identifiable, Codable {
-    let id: UUID
-    let date: Date
-    let title: String
-    let dimensions: String
-    let material: String
-    let blueprintData: String // Simulated blueprint string
-    let mass: String
-    let scanQuality: String
-    var imagePath: String? = nil
-}
-
 
 struct ResearchPaper: Identifiable, Codable {
     let id: UUID
@@ -1183,6 +836,78 @@ struct ResearchPaper: Identifiable, Codable {
     let title: String
     let content: String
 }
+
+// MARK: - Toolbar & Tabs
+struct CustomBottomToolbar: View {
+    @ObservedObject var viewModel: KineprintViewModel
+    @Binding var selectedTab: AppTab
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 0) {
+            TabBarButton(tab: .home, currentTab: $selectedTab, title: "HOME", icon: "house")
+            Spacer(minLength: 0)
+            TabBarButton(tab: .iot, currentTab: $selectedTab, title: "ENGINEERING", icon: "network")
+            Spacer(minLength: 0)
+            
+            // Central Hub/Calculator Button
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { selectedTab = .calculator }
+            }) {
+                ZStack {
+                    Circle()
+                        .fill(Color.black)
+                        .frame(width: 70, height: 70)
+                    Circle()
+                        .stroke(selectedTab == .calculator ? .white : neonCyan, lineWidth: selectedTab == .calculator ? 2 : 1)
+                        .frame(width: 60, height: 60)
+                    Image(systemName: "plus.forwardslash.minus")
+                        .font(.system(size: 26, weight: .regular))
+                        .foregroundColor(selectedTab == .calculator ? .white : neonCyan)
+                }
+            }
+            .offset(y: -20)
+            
+            Spacer(minLength: 0)
+            TabBarButton(tab: .archive, currentTab: $selectedTab, title: "REVISION", icon: "graduationcap")
+            Spacer(minLength: 0)
+            TabBarButton(tab: .profile, currentTab: $selectedTab, title: "PROFILE", icon: "circle.fill")
+        }
+        .padding(.horizontal, 25)
+        .frame(height: 80)
+        .background(Color.black.ignoresSafeArea(edges: .bottom))
+        // Replacing capsule with edge-to-edge black bar
+    }
+}
+
+struct TabBarButton: View {
+    let tab: AppTab
+    @Binding var currentTab: AppTab
+    let title: String
+    let icon: String
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+
+    var body: some View {
+        Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                currentTab = tab
+            }
+        }) {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 22))
+                    .foregroundColor(currentTab == tab ? neonCyan : .gray.opacity(0.8))
+                
+                Text(title)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(currentTab == tab ? neonCyan : .gray.opacity(0.8))
+            }
+            .frame(width: 60)
+            .padding(.top, 10)
+        }
+    }
+}
+
 
 // MARK: - ViewModel
 
@@ -1194,19 +919,8 @@ class KineprintViewModel: ObservableObject {
     @Published var freezeFrameMode = false
     @Published var trackingActive = false
     @Published var lidarAvailable = false
-    @Published var isScanning = true
-    @Published var isDeepScanning = false
-    @Published var deepScanProgress: CGFloat = 0
-    @Published var lastScannedEntry: ResearchEntry?
-    @Published var researchEntries: [ResearchEntry] = []
     @Published var publishedPapers: [ResearchPaper] = []
     @Published var isSidebarExpanded = false
-    
-    // New processing states
-    @Published var isHackerProcessing = false
-    @Published var showCapturedBlueprint = false
-    
-    var onCaptureBlueprint: (() -> UIImage?)? = nil
     
     // Personalization & State
     @AppStorage("userName") var userName: String = ""
@@ -1258,11 +972,7 @@ class KineprintViewModel: ObservableObject {
     private let physicsEngine = PhysicsEngine.shared
     
     init() {
-        if ARWorldTrackingConfiguration.isSupported {
-            lidarAvailable = ARWorldTrackingConfiguration.supportsSceneReconstruction(.mesh)
-        } else {
-            lidarAvailable = false
-        }
+        lidarAvailable = false
     }
     
     func completeOnboarding(with name: String) {
@@ -1386,176 +1096,11 @@ class KineprintViewModel: ObservableObject {
         trackingActive = false
     }
 
-    // MARK: - Research & Deep Scan
-    
-    func initiateDeepScan() {
-        isDeepScanning = true
-        deepScanProgress = 0
-        
-        Task { @MainActor in
-            while isDeepScanning {
-                try? await Task.sleep(nanoseconds: 50_000_000) // 0.05s
-                guard !Task.isCancelled else { break }
-                
-                self.deepScanProgress += 0.02
-                if self.deepScanProgress >= 1.0 {
-                    self.completeDeepScan()
-                    break
-                }
-            }
-        }
-    }
-    
-    private func completeDeepScan() {
-        let newEntry = ResearchEntry(
-            id: UUID(),
-            date: Date(),
-            title: "OBJECT_\(Int.random(in: 1000...9999))",
-            dimensions: "\(Double.random(in: 10...50).formatted(.number.precision(.fractionLength(1)))) x \(Double.random(in: 10...50).formatted(.number.precision(.fractionLength(1)))) x \(Double.random(in: 5...20).formatted(.number.precision(.fractionLength(1)))) cm",
-            material: ["AISI 304 Stainless", "6061 Aluminum", "ABS Polymer", "Carbon Fiber Composite"].randomElement() ?? "Metal Alloy",
-            blueprintData: "RAW_BLUEPRINT_VECTOR_\(UUID().uuidString.prefix(8))",
-            mass: "\(Double.random(in: 0.2...5.0).formatted(.number.precision(.fractionLength(2)))) kg",
-            scanQuality: "98.4% NOMINAL"
-        )
-        
-        researchEntries.append(newEntry)
-        lastScannedEntry = newEntry
-        
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            self.isDeepScanning = false
-            self.lastScannedEntry = nil
-        }
-    }
-    
-    func cloneEntry(_ entry: ResearchEntry) {
-        let cloned = ResearchEntry(
-            id: UUID(),
-            date: Date(),
-            title: entry.title + "_CLONE",
-            dimensions: entry.dimensions,
-            material: entry.material,
-            blueprintData: entry.blueprintData,
-            mass: entry.mass,
-            scanQuality: entry.scanQuality
-        )
-        researchEntries.append(cloned)
-    }
-    
     // MARK: - Papers
     
     func publishPaper(title: String, content: String) {
         let paper = ResearchPaper(id: UUID(), date: Date(), title: title, content: content)
         publishedPapers.append(paper)
-    }
-    
-    // MARK: - Capture & Blueprint Flow
-    
-    func captureBlueprintImage() {
-        // Trigger haptic
-        let generator = UIImpactFeedbackGenerator(style: .heavy)
-        generator.impactOccurred()
-        
-        // Take snapshot immediately
-        let snapshot = onCaptureBlueprint?()
-        
-        isHackerProcessing = true
-        showCapturedBlueprint = false
-        
-        // Let processing animation run for ~2.5 seconds, then show blueprint
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_500_000_000)
-            self.generateBlueprintResult(image: snapshot)
-            withAnimation(.easeOut(duration: 0.5)) {
-                self.isHackerProcessing = false
-                self.showCapturedBlueprint = true
-            }
-        }
-    }
-    
-    private func saveImageLocally(_ image: UIImage, id: UUID) -> String? {
-        guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
-        let filename = getDocumentsDirectory().appendingPathComponent("\(id.uuidString).jpg")
-        try? data.write(to: filename)
-        return filename.path
-    }
-    
-    private func getDocumentsDirectory() -> URL {
-        let paths = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)
-        return paths[0]
-    }
-    
-    private func generateBlueprintResult(image: UIImage?) {
-        guard let img = image, let cgImg = img.cgImage else {
-            generateMockBlueprintResult()
-            return
-        }
-        
-        let handler = VNImageRequestHandler(cgImage: cgImg, options: [:])
-        let request = VNClassifyImageRequest { [weak self] request, error in
-            guard let results = request.results as? [VNClassificationObservation],
-                  let topResult = results.first else {
-                self?.generateMockBlueprintResult()
-                return
-            }
-            
-            let label = topResult.identifier.replacingOccurrences(of: "_", with: " ").capitalized
-            let confidence = topResult.confidence
-            
-            // Heuristic for material
-            var material = "Composite"
-            let l = label.lowercased()
-            if l.contains("person") || l.contains("human") || l.contains("face") { material = "Biological Tissue" }
-            else if l.contains("metal") || l.contains("steel") { material = "Industrial Alloy" }
-            else if l.contains("wood") { material = "Organic Cellulose" }
-            else if l.contains("plastic") { material = "High-Density Polymer" }
-            
-            DispatchQueue.main.async {
-                let newId = UUID()
-                let savedPath = self?.saveImageLocally(img, id: newId)
-                
-                let newEntry = ResearchEntry(
-                    id: newId,
-                    date: Date(),
-                    title: label.uppercased(),
-                    dimensions: "\(Double.random(in: 10...150).formatted(.number.precision(.fractionLength(2))))W x \(Double.random(in: 10...150).formatted(.number.precision(.fractionLength(2))))H cm",
-                    material: material,
-                    blueprintData: "VEC_\(UUID().uuidString.prefix(10))",
-                    mass: "\(Double.random(in: 0.1...70.0).formatted(.number.precision(.fractionLength(2)))) kg",
-                    scanQuality: "\(String(format: "%.1f", confidence * 100))% PRECISION",
-                    imagePath: savedPath
-                )
-                
-                self?.researchEntries.insert(newEntry, at: 0)
-                self?.lastScannedEntry = newEntry
-                NotificationManager.shared.scheduleScanCompleteNotification(itemName: newEntry.title)
-            }
-        }
-        
-        do {
-            try handler.perform([request])
-        } catch {
-            generateMockBlueprintResult()
-        }
-    }
-    
-    private func generateMockBlueprintResult() {
-        let newEntry = ResearchEntry(
-            id: UUID(),
-            date: Date(),
-            title: "UNKNOWN_ASSET",
-            dimensions: "45.2W x 32.1H cm",
-            material: "Organic-Synthetic Hybrid",
-            blueprintData: "RAW_BLUEPRINT_VECTOR",
-            mass: "1.24 kg",
-            scanQuality: "88.2% ESTIMATED"
-        )
-        researchEntries.insert(newEntry, at: 0)
-        lastScannedEntry = newEntry
-    }
-
-    func dismissBlueprintView() {
-        showCapturedBlueprint = false
     }
 }
 

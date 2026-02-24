@@ -165,8 +165,12 @@ struct GridBackground: View {
     @State private var opac: Double = 0.0
     
     var body: some View {
+        let physicsFormulas = ["F = m·a", "v = u + a·t", "E = m·c²", "p = m·v", "τ = r × F", "K = ½·m·v²", "ω = v / r", "W = F·d·cos(θ)"]
+        
         ZStack {
             Color.black
+            
+            FloatingFormulasView(formulas: physicsFormulas, color: color).ignoresSafeArea()
             
             // Subtle Radial Glow
             RadialGradient(colors: [color.opacity(0.08), .clear], center: .center, startRadius: 0, endRadius: max(size.width, size.height))

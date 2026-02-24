@@ -11,7 +11,7 @@ struct VelocityGameView: View {
     private let neonGreen = Color(red: 0.2, green: 1, blue: 0.4)
     private let neonRed = Color(red: 1, green: 0.3, blue: 0.3)
     
-    @State private var force: Double = 10.0         // N
+    @State private var forceInput: String = ""
     @State private var mass: Double = 5.0           // kg
     @State private var friction: Double = 2.0       // N
     @State private var isRunning = false
@@ -26,8 +26,9 @@ struct VelocityGameView: View {
     @State private var accuracy: Double = 0.0
     
     // Level-based target velocity
-    private var targetVelocity: Double { 3.0 + Double(level) * 1.5 }
-    private var tolerance: Double { 0.4 }
+    private var targetVelocity: Double { 5.0 + Double(level) * 2.5 }
+    private var tolerance: Double { 0.1 }
+    private var exactForce: Double { friction + (mass * targetVelocity / 3.0) }
     
     var body: some View {
         ZStack {
@@ -76,15 +77,12 @@ struct VelocityGameView: View {
                                     
                                     Spacer()
                                     
-                                    VStack(alignment: .trailing, spacing: 4) {
-                                        Text("PREDICTED_ACCEL")
+                                        Text("REQD_FORCE")
                                             .font(.system(size: 8, weight: .black, design: .monospaced))
                                             .foregroundColor(.gray)
-                                        Text(String(format: "%.3f", max(0, (force - friction) / mass)))
-                                            .font(.system(size: 20, weight: .black, design: .monospaced))
-                                            .foregroundColor(neonGreen)
-                                        Text("m/s²").font(.system(size: 8, weight: .bold, design: .monospaced)).foregroundColor(.gray)
-                                    }
+                                        Text("CALCULATING...")
+                                            .font(.system(size: 14, weight: .black, design: .monospaced))
+                                            .foregroundColor(neonCyan)
                                 }
                                 .padding(20)
                                 .background(Color.white.opacity(0.04))
@@ -139,9 +137,40 @@ struct VelocityGameView: View {
                             
                             // Controls
                             VStack(spacing: 20) {
-                                ScientificSlider(label: "APPLIED_FORCE (N)", value: $force, range: 1...40, unit: "N", color: neonCyan)
-                                ScientificSlider(label: "OBJECT_MASS (kg)", value: $mass, range: 1...25, unit: "kg", color: .purple)
-                                ScientificSlider(label: "FRICTION_LOAD (N)", value: $friction, range: 0...15, unit: "N", color: neonRed)
+                                Text(level > 3 ? "FORCE CALCULATIONS MASTERED" : "Calculate Exact Applied Force (F) required to reach \(String(format: "%.1f", targetVelocity)) m/s in 3s.")
+                                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                                    .foregroundColor(.white)
+                                    .multilineTextAlignment(.center)
+                                
+                                HStack(spacing: 40) {
+                                    VStack {
+                                        Text("MASS").font(.system(size: 10, weight: .bold)).foregroundColor(.gray)
+                                        Text("\(String(format: "%.1f", mass)) kg").font(.system(size: 20, weight: .black)).foregroundColor(.white)
+                                    }
+                                    VStack {
+                                        Text("FRICTION").font(.system(size: 10, weight: .bold)).foregroundColor(.gray)
+                                        Text("\(String(format: "%.1f", friction)) N").font(.system(size: 20, weight: .black)).foregroundColor(.white)
+                                    }
+                                    VStack {
+                                        Text("TIME").font(.system(size: 10, weight: .bold)).foregroundColor(.gray)
+                                        Text("3.0 s").font(.system(size: 20, weight: .black)).foregroundColor(.white)
+                                    }
+                                }
+                                
+                                HStack {
+                                    Text("F = ")
+                                        .font(.system(size: 24, weight: .bold, design: .serif))
+                                        .foregroundColor(neonCyan)
+                                    TextField("?", text: $forceInput)
+                                        .keyboardType(.decimalPad)
+                                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.white)
+                                        .frame(width: 100)
+                                        .padding(10)
+                                        .background(Color.white.opacity(0.1))
+                                        .cornerRadius(8)
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(neonCyan, lineWidth: 1))
+                                }
                             }
                             .padding(20)
                             .background(Color.white.opacity(0.04))
@@ -181,8 +210,9 @@ struct VelocityGameView: View {
     }
     
     private func launchSimulation() {
+        guard let inForce = Double(forceInput) else { return }
         objectX = 0; currentVelocity = 0; isRunning = true; showResult = false
-        let accel = max(0.0, (force - friction) / mass)
+        let accel = max(0.0, (inForce - friction) / mass)
         let dt = 0.04
         var elapsed = 0.0
         let maxTime = 3.0
@@ -219,8 +249,8 @@ struct VelocityGameView: View {
         }
     }
     
-    private func nextLevel() { level = min(level + 1, 10); retryLevel() }
-    private func retryLevel() { withAnimation { showResult = false; objectX = 0; currentVelocity = 0 } }
+    private func nextLevel() { level = min(level + 1, 10); mass += 2.0; friction += 0.5; retryLevel() }
+    private func retryLevel() { withAnimation { forceInput = ""; showResult = false; objectX = 0; currentVelocity = 0 } }
 }
 
 // MARK: - Supporting Views
