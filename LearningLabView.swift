@@ -15,15 +15,19 @@ struct LearningLabView: View {
     @State private var showCentripetalGame = false
     @State private var showEnergyGame = false
 
-    @State private var trajectoryScore = 0
-    @State private var velocityScore = 0
-    @State private var oscillationScore = 0
-    @State private var landingScore = 0
-    @State private var momentumScore = 0
-    @State private var collisionScore = 0
-    @State private var centripetalScore = 0
-    @State private var energyScore = 0
+    @State private var showFlashcards = false
+
+    @AppStorage("trajectoryScore") private var trajectoryScore = 0
+    @AppStorage("velocityScore") private var velocityScore = 0
+    @AppStorage("oscillationScore") private var oscillationScore = 0
+    @AppStorage("landingScore") private var landingScore = 0
+    @AppStorage("momentumScore") private var momentumScore = 0
+    @AppStorage("collisionScore") private var collisionScore = 0
+    @AppStorage("centripetalScore") private var centripetalScore = 0
+    @AppStorage("energyScore") private var energyScore = 0
     
+    // We make this public/accessible by making an extension or just computing it where needed.
+    // For local use here:
     private var totalGameScore: Int { 
         trajectoryScore + velocityScore + oscillationScore + landingScore + 
         momentumScore + collisionScore + centripetalScore + energyScore 
@@ -45,6 +49,37 @@ struct LearningLabView: View {
                 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
+                        // Flashcard Shortcut
+                        Button(action: { showFlashcards = true }) {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color.orange.opacity(0.15))
+                                        .frame(width: 36, height: 36)
+                                    Image(systemName: "rectangle.stack.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.orange)
+                                }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("MECHANICS FLASHCARDS")
+                                        .font(.system(size: 11, weight: .black, design: .monospaced))
+                                        .foregroundColor(.white)
+                                    Text("REVISE KINEMATICS & ENGINEERING CONCEPTS")
+                                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.orange.opacity(0.6))
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.orange.opacity(0.5))
+                            }
+                            .padding(14)
+                            .background(Color.white.opacity(0.04))
+                            .cornerRadius(14)
+                            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.orange.opacity(0.2), lineWidth: 1))
+                        }
+                        .padding(.horizontal, 16)
+                        
                         // Challenge Selection
                         ChallengeSelectionView(
                             challengeManager: challengeManager,
@@ -75,6 +110,9 @@ struct LearningLabView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .fullScreenCover(isPresented: $showFlashcards) {
+            ResearchLibraryView(viewModel: KineprintViewModel(), initialTopic: "MECHANICS & ENGINEERING")
+        }
         .fullScreenCover(isPresented: $showTrajectoryGame) { TrajectoryGameView(score: $trajectoryScore) }
         .fullScreenCover(isPresented: $showVelocityGame) { VelocityGameView(score: $velocityScore) }
         .fullScreenCover(isPresented: $showOscillationGame) { OscillationGameView(score: $oscillationScore) }
@@ -480,7 +518,7 @@ struct PhysicsInsightView: View {
                 .lineSpacing(4)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .onChange(of: challengeManager.selectedChallengeType) { _ in
+                .legacyOnChange(of: challengeManager.selectedChallengeType) { _ in
                     startTyping()
                 }
         }

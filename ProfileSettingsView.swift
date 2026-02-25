@@ -12,7 +12,12 @@ import PhotosUI
 @MainActor
 struct ProfileSettingsView: View {
     @StateObject private var settingsManager = SettingsManager()
+    @State private var showSettingsExportSheet = false
     @State private var showResetAlert = false
+    @State private var showPasskeyManager = false // New state for Passkey Manager sheet
+    @State private var showPerformanceReports = false // New state for Analytics
+    
+    // Gyroscope Calibration State
     @State private var showCalibrationProgress = false
     @State private var calibrationProgress: Double = 0
     @State private var calibrationDone = false
@@ -85,52 +90,19 @@ struct ProfileSettingsView: View {
                         }
                         .padding(.horizontal, 16)
 
-                        // ─── UNITS ───
-                        SettingsSection(title: "UNITS") {
-                            VStack(spacing: 8) {
-                                SettingsPickerRow(
-                                    label: "Measurement",
-                                    binding: $settingsManager.measurementUnits,
-                                    options: [("Metric", MeasurementUnits.metric), ("Imperial", MeasurementUnits.imperial)]
-                                )
-                                Divider().background(neonCyan.opacity(0.1))
-                                SettingsPickerRow(
-                                    label: "Temperature",
-                                    binding: $settingsManager.temperatureUnit,
-                                    options: [("Celsius", TemperatureUnit.celsius), ("Fahrenheit", TemperatureUnit.fahrenheit)]
-                                )
-                            }
-                        }
-
-                        // ─── PERFORMANCE MODE ───
-                        SettingsSection(title: "PERFORMANCE MODE") {
-                            VStack(spacing: 8) {
-                                SettingsPickerRow(
-                                    label: "Rendering Quality",
-                                    binding: $settingsManager.renderingQuality,
-                                    options: [("High", RenderingQuality.high), ("Balanced", RenderingQuality.balanced), ("Efficient", RenderingQuality.efficient)]
-                                )
-                                Divider().background(neonCyan.opacity(0.1))
-                                SettingsPickerRow(
-                                    label: "LiDAR Density",
-                                    binding: $settingsManager.lidarDensity,
-                                    options: [("Detailed", LiDARDensity.detailed), ("Standard", LiDARDensity.standard), ("Light", LiDARDensity.light)]
-                                )
-                            }
-                        }
-
-                        // ─── VECTOR VISIBILITY (ACTIVE TOGGLES) ───
-                        SettingsSection(title: "VECTOR VISIBILITY") {
+                        // ─── PERFORMANCE REPORTS (NEW) ───
+                        SettingsSection(title: "ANALYTICS & REPORTS") {
                             VStack(spacing: 10) {
-                                VectorToggleRow(label: "Velocity Vectors", isOn: $settingsManager.showVelocityVectors)
-                                Divider().background(neonCyan.opacity(0.1))
-                                VectorToggleRow(label: "Acceleration Vectors", isOn: $settingsManager.showAccelerationVectors)
-                                Divider().background(neonCyan.opacity(0.1))
-                                VectorToggleRow(label: "Trajectory Ghosting", isOn: $settingsManager.showTrajectoryGhosting)
-                                Divider().background(neonCyan.opacity(0.1))
-                                VectorToggleRow(label: "Grid Overlay", isOn: $settingsManager.showGridOverlay)
+                                ActionRow(
+                                    icon: "server.rack",
+                                    label: "DATA CENTER ANALYSIS",
+                                    color: neonCyan,
+                                    action: { showPerformanceReports = true }
+                                )
                             }
                         }
+
+
 
                         // ─── DATA EXPORT (ACTIVE) ───
                         SettingsSection(title: "DATA EXPORT") {
@@ -142,52 +114,6 @@ struct ProfileSettingsView: View {
                                     color: neonCyan,
                                     action: triggerExportMeasurements
                                 )
-                                Divider().background(neonCyan.opacity(0.1))
-                                // Export Calibration → PDF
-                                ActionRow(
-                                    icon: "doc.richtext",
-                                    label: "EXPORT CALIBRATION (PDF)",
-                                    color: neonCyan,
-                                    action: triggerExportCalibrationPDF
-                                )
-                            }
-                        }
-
-                        // ─── CALIBRATION (ACTIVE) ───
-                        SettingsSection(title: "CALIBRATION") {
-                            VStack(spacing: 10) {
-                                // Reset calibration with confirmation
-                                ActionRow(
-                                    icon: "arrow.triangle.2.circlepath",
-                                    label: "RESET CALIBRATION",
-                                    color: .orange,
-                                    action: { showResetAlert = true }
-                                )
-                                Divider().background(neonCyan.opacity(0.1))
-                                // Gyroscope calibration with live progress
-                                if showCalibrationProgress {
-                                    VStack(spacing: 8) {
-                                        HStack {
-                                            Image(systemName: "gyroscope")
-                                                .foregroundColor(neonCyan)
-                                            Text(calibrationDone ? "CALIBRATION COMPLETE ✓" : "CALIBRATING GYROSCOPE...")
-                                                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                                                .foregroundColor(calibrationDone ? .green : neonCyan)
-                                            Spacer()
-                                        }
-                                        ProgressView(value: calibrationProgress)
-                                            .tint(calibrationDone ? .green : neonCyan)
-                                            .animation(.linear(duration: 0.05), value: calibrationProgress)
-                                    }
-                                    .padding(.vertical, 4)
-                                } else {
-                                    ActionRow(
-                                        icon: "gyroscope",
-                                        label: "CALIBRATE GYROSCOPE",
-                                        color: neonCyan,
-                                        action: startGyroscopeCalibration
-                                    )
-                                }
                             }
                         }
 
@@ -209,6 +135,27 @@ struct ProfileSettingsView: View {
                                         .font(.system(size: 11, design: .monospaced))
                                         .foregroundColor(.gray)
                                 }
+                            }
+                        }
+
+                        // ─── APP SETTINGS ───
+                        SettingsSection(title: "APP SETTINGS") {
+                            VStack(spacing: 10) {
+                                ActionRow(
+                                    icon: "info.circle",
+                                    label: "ABOUT KINEPRINT",
+                                    color: neonCyan,
+                                    action: {
+                                        showToastMessage("KineprintApp v2.1 - Neural Interface System. All systems nominal.")
+                                    }
+                                )
+                                Divider().background(neonCyan.opacity(0.1))
+                                ActionRow(
+                                    icon: "lock.rectangle",
+                                    label: "MANAGE SECURE PASSKEY",
+                                    color: neonCyan,
+                                    action: { showPasskeyManager = true }
+                                )
                             }
                         }
 
@@ -256,6 +203,12 @@ struct ProfileSettingsView: View {
         }
         .sheet(isPresented: $showExportSheet) {
             ActivityViewController(activityItems: exportItems)
+        }
+        .sheet(isPresented: $showPasskeyManager) { // Presenting the new Passkey Manager sheet
+            PasskeyManagerSheet(isPresented: $showPasskeyManager)
+        }
+        .fullScreenCover(isPresented: $showPerformanceReports) {
+            PerformanceAnalyticsView(isPresented: $showPerformanceReports)
         }
     }
 
@@ -801,7 +754,7 @@ struct PhotoIdentitySheet: View {
                     .cornerRadius(12)
                     .padding(.horizontal, 40)
             }
-            .onChange(of: selectedItem) { newItem in
+            .legacyOnChange(of: selectedItem) { newItem in
                 Task {
                     if let data = try? await newItem?.loadTransferable(type: Data.self) {
                         settingsManager.profileImageData = data
@@ -993,10 +946,10 @@ class SettingsManager: ObservableObject {
     @Published var temperatureUnit: TemperatureUnit = .celsius
     @Published var renderingQuality: RenderingQuality = .balanced
     @Published var lidarDensity: LiDARDensity = .standard
-    @Published var showVelocityVectors = true
-    @Published var showAccelerationVectors = true
-    @Published var showTrajectoryGhosting = true
-    @Published var showGridOverlay = true
+    @AppStorage("showVelocityVectors") var showVelocityVectors = true
+    @AppStorage("showAccelerationVectors") var showAccelerationVectors = true
+    @AppStorage("showTrajectoryGhosting") var showTrajectoryGhosting = true
+    @AppStorage("showGridOverlay") var showGridOverlay = true
 
     // MARK: - Export Measurements as plain text
     func generateMeasurementsText() -> String {
@@ -1138,6 +1091,104 @@ class SettingsManager: ObservableObject {
         showAccelerationVectors = true
         showTrajectoryGhosting = true
         showGridOverlay = true
+    }
+}
+
+// MARK: - Passkey Manager Sheet
+struct PasskeyManagerSheet: View {
+    @Binding var isPresented: Bool
+    @State private var currentPasskey = UserDefaults.standard.string(forKey: "SecretVaultPasskey") ?? ""
+    @State private var newPasskey = ""
+    @State private var message = ""
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            
+            VStack(spacing: 30) {
+                HStack {
+                    Text("SECURE VAULT ACCESS")
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                    Spacer()
+                    Button(action: { isPresented = false }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title)
+                            .foregroundColor(.gray)
+                    }
+                }
+                
+                Text("Manage your numeric bypass code for the Scientific Calculator.")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.gray)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                VStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("CURRENT PASSKEY")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.gray)
+                        Text(currentPasskey.isEmpty ? "NOT SET" : currentPasskey)
+                            .font(.system(size: 24, weight: .heavy, design: .monospaced))
+                            .foregroundColor(.white)
+                            .padding()
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.white.opacity(0.05))
+                            .cornerRadius(12)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("NEW PASSKEY")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(.gray)
+                        
+                        TextField("Enter new numbers...", text: $newPasskey)
+                            .keyboardType(.numberPad)
+                            .font(.system(size: 20, weight: .bold, design: .monospaced))
+                            .foregroundColor(neonCyan)
+                            .padding()
+                            .background(Color.black)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(neonCyan.opacity(0.5), lineWidth: 1))
+                    }
+                    
+                    if !message.isEmpty {
+                        Text(message)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.green)
+                    }
+                }
+                
+                Button(action: saveNewPasskey) {
+                    Text("UPDATE IDENTIFIER")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(.black)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(neonCyan)
+                        .cornerRadius(12)
+                }
+                
+                Spacer()
+            }
+            .padding(24)
+            .padding(.top, 20)
+        }
+    }
+    
+    private func saveNewPasskey() {
+        guard !newPasskey.isEmpty && newPasskey.allSatisfy({ $0.isNumber }) else {
+            message = "Passkey must be numeric."
+            return
+        }
+        UserDefaults.standard.set(newPasskey, forKey: "SecretVaultPasskey")
+        currentPasskey = newPasskey
+        newPasskey = ""
+        message = "Passkey updated successfully ✓"
+        
+        let generator = UINotificationFeedbackGenerator()
+        generator.notificationOccurred(.success)
     }
 }
 #endif

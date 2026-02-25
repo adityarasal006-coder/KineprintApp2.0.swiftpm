@@ -30,6 +30,11 @@ struct LandingGameView: View {
     @State private var streak = 0
     @State private var thinkingLog: [String] = ["SYSTEM_INIT: SUCCESS", "KINETIC_LINK: ESTABLISHED"]
     
+    @AppStorage("showVelocityVectors") var showVelocityVectors = true
+    @AppStorage("showAccelerationVectors") var showAccelerationVectors = true
+    @AppStorage("showTrajectoryGhosting") var showTrajectoryGhosting = true
+    @AppStorage("showGridOverlay") var showGridOverlay = true
+    
     // Computed physics values
     private var timeOfFlight: Double { 2.0 * v0 * sin(angle * .pi / 180) / g }
     private var range: Double { v0 * v0 * sin(2.0 * angle * .pi / 180) / g }
@@ -52,8 +57,13 @@ struct LandingGameView: View {
                 
                 ZStack {
                     GeometryReader { geo in
-                        GridBackground(color: neonCyan, size: geo.size)
-                            .onAppear { canvasSize = geo.size }
+                        ZStack {
+                            if showGridOverlay {
+                                GridBackground(color: neonCyan, size: geo.size)
+                            }
+                            Color.clear
+                        }
+                        .onAppear { canvasSize = geo.size }
                     }
                     
                     VStack(spacing: 0) {
@@ -127,18 +137,45 @@ struct LandingGameView: View {
                             
                             // Projectile
                             if isLaunched {
-                                if !trailPoints.isEmpty {
+                                if showTrajectoryGhosting && !trailPoints.isEmpty {
                                     Path { p in
                                         p.move(to: trailPoints[0])
                                         for pt in trailPoints { p.addLine(to: pt) }
                                     }
                                     .stroke(neonCyan.opacity(0.4), style: StrokeStyle(lineWidth: 2, dash: [5, 5]))
-                                    
+                                }
+                                
+                                if !trailPoints.isEmpty {
                                     Circle()
                                         .fill(neonCyan)
                                         .frame(width: 12, height: 12)
                                         .shadow(color: neonCyan.opacity(0.8), radius: 6)
                                         .position(trailPoints.last!)
+                                        
+                                    // Vectors
+                                    if showVelocityVectors, trailPoints.count > 1 {
+                                        let last = trailPoints.last!
+                                        let prev = trailPoints[trailPoints.count - 2]
+                                        let dx = last.x - prev.x
+                                        let dy = last.y - prev.y
+                                        let dist = max(sqrt(dx*dx + dy*dy), 0.1)
+                                        let nx = dx / dist
+                                        let ny = dy / dist
+                                        
+                                        Path { p in
+                                            p.move(to: last)
+                                            p.addLine(to: CGPoint(x: last.x + nx * 40, y: last.y + ny * 40))
+                                        }
+                                        .stroke(Color.green, lineWidth: 2)
+                                    }
+                                    
+                                    if showAccelerationVectors, let last = trailPoints.last {
+                                        Path { p in
+                                            p.move(to: last)
+                                            p.addLine(to: CGPoint(x: last.x, y: last.y + 40))
+                                        }
+                                        .stroke(Color.red, lineWidth: 2)
+                                    }
                                 }
                             }
                             

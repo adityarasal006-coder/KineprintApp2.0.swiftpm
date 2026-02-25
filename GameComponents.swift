@@ -336,6 +336,19 @@ struct ScientificSlider: View {
     let unit: String
     let color: Color
     
+    @AppStorage("showVelocityVectors") var showVelocityVectors = true
+    @AppStorage("showAccelerationVectors") var showAccelerationVectors = true
+    @AppStorage("showTrajectoryGhosting") var showTrajectoryGhosting = true
+    @AppStorage("showGridOverlay") var showGridOverlay = true
+
+    var isVisible: Bool {
+        let upper = label.uppercased()
+        if upper.contains("VELOCITY") || upper.contains("THRUST") { return showVelocityVectors }
+        if upper.contains("FORCE") || upper.contains("ACCEL") { return showAccelerationVectors }
+        if upper.contains("THETA") || upper.contains("ANGLE") { return showTrajectoryGhosting }
+        return true
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -343,9 +356,9 @@ struct ScientificSlider: View {
                     .font(.system(size: 8, weight: .bold, design: .monospaced))
                     .foregroundColor(.gray)
                 Spacer()
-                Text(String(format: "%.1f %@", value, unit))
+                Text(isVisible ? String(format: "%.1f %@", value, unit) : "[OFF]")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(color)
+                    .foregroundColor(isVisible ? color : Color.red.opacity(0.8))
             }
             Slider(value: $value, in: range)
                 .tint(color)
@@ -358,17 +371,31 @@ struct HUDDataRow: View {
     let value: String
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
+    @AppStorage("showVelocityVectors") var showVelocityVectors = true
+    @AppStorage("showAccelerationVectors") var showAccelerationVectors = true
+    @AppStorage("showTrajectoryGhosting") var showTrajectoryGhosting = true
+    @AppStorage("showGridOverlay") var showGridOverlay = true
+
+    var isVisible: Bool {
+        let upper = label.uppercased()
+        if upper.contains("VEL") || upper.contains("V_INIT") { return showVelocityVectors }
+        if upper.contains("ACC") || upper.contains("G_FORCE") || upper.contains("FORCE") { return showAccelerationVectors }
+        if upper.contains("THETA") || upper.contains("TRAJECTORY") || upper.contains("ANGLE") { return showTrajectoryGhosting }
+        if upper.contains("DIST") || upper.contains("POS") || upper.contains("COORD") { return showGridOverlay }
+        return true
+    }
+    
     var body: some View {
         HStack {
             Text(label)
                 .font(.system(size: 8, design: .monospaced))
                 .foregroundColor(.gray)
             Spacer()
-            Text(value)
+            Text(isVisible ? value : "[OFF]")
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(neonCyan)
+                .foregroundColor(isVisible ? neonCyan : Color.red.opacity(0.8))
         }
-        .frame(width: 100)
+        .frame(minWidth: 100)
     }
 }
 struct ConfettiBurstView: View {

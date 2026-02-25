@@ -180,7 +180,7 @@ struct KineprintView: View {
                 speakWelcomeBack()
             }
         }
-        .onChange(of: scenePhase) { newPhase in
+        .legacyOnChange(of: scenePhase) { newPhase in
             if newPhase == .active {
                 showGoodbye = false
                 showExitConfirm = false

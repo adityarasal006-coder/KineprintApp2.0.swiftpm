@@ -131,9 +131,9 @@ struct OscillationGameView: View {
                             .background(Color.white.opacity(0.04))
                             .cornerRadius(24)
                             .padding(.horizontal, 16)
-                            .onChange(of: damping) { _ in resetSimulation() }
-                            .onChange(of: springK) { _ in resetSimulation() }
-                            .onChange(of: mass) { _ in resetSimulation() }
+                            .legacyOnChange(of: damping) { _ in resetSimulation() }
+                            .legacyOnChange(of: springK) { _ in resetSimulation() }
+                            .legacyOnChange(of: mass) { _ in resetSimulation() }
                             
                             if !showResult {
                                 Button(action: isRunning ? stopTimer : startSimulation) {

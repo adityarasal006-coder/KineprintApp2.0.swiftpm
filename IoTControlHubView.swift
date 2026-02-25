@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreBluetooth
+import AudioToolbox
 
 struct IoTControlHubView: View {
     @StateObject private var bluetoothManager = BluetoothManager()
@@ -1578,139 +1579,133 @@ struct ActiveButtonStyle: ButtonStyle {
     }
 }
 
-// MARK: - Hardware Interfacing Animation
+// MARK: - Hardware Interfacing Animation (Scanner-Style)
 struct HardwareInterfacingView: View {
     let device: IoTDevice
     @Binding var isPresented: Bool
     var onComplete: () -> Void
     
-    @State private var phase: Int = 1 // Start immediately at phase 1
+    @State private var scanPhase = 0
+    @State private var matrixLines: [String] = Array(repeating: "", count: 20)
+    @State private var glitchOffset: CGFloat = 0
+    
+    @State private var innerRotation: Double = 0
+    @State private var middleRotation: Double = 0
+    @State private var outerRotation: Double = 0
+    
+    @State private var showHardware = false
+    @State private var instructionIndex = 0
+    @State private var hudVisible = false
     @State private var popups: [InterfacingPopup] = []
-    @State private var dataStreams: [DataStreamPacket] = []
-    @State private var showHardware: Bool = false
-    @State private var instructionIndex: Int = 0
-    @State private var backgroundOpacity: Double = 0
+    @State private var showRedWarning = false
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
     
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            // Background Data Attack (CROWDY)
-            ZStack {
-                ForEach(dataStreams) { packet in
-                    Text(packet.content)
-                        .font(.system(size: packet.size, weight: .bold, design: .monospaced))
-                        .foregroundColor(neonCyan.opacity(packet.opacity))
-                        .position(packet.position)
-                        .onAppear {
-                            withAnimation(.linear(duration: packet.duration)) {
-                                dataStreams[dataStreams.firstIndex(where: { $0.id == packet.id })!].position.y += 1000
-                            }
-                        }
-                }
-            }
-            .opacity(backgroundOpacity)
+            // Animation removed per user request
             
-            // Phase 1: Thrown windows/popups
-            ForEach(popups) { popup in
-                InterfacingPopupView(popup: popup)
-            }
+
             
-            // Phase 2: Actual Hardware Component Image
+
+            
+            // Removed heavy red flash warning strobe
+            
+            // Device Info (after scan)
             if showHardware {
-               VStack(spacing: 25) {
-                   ZStack {
-                       // Scanning Rings
-                       ForEach(0..<3) { i in
-                           Circle()
-                               .stroke(neonCyan.opacity(0.2), lineWidth: 1)
-                               .frame(width: CGFloat(220 + i * 40))
-                               .scaleEffect(phase == 2 ? 1.1 : 0.8)
-                       }
-                       
-                       // REAL COMPONENT IMAGE
-                       Image(device.imageName)
-                           .resizable()
-                           .aspectRatio(contentMode: .fit)
-                           .frame(width: 180, height: 180)
-                           .background(Color.black)
-                           .clipShape(RoundedRectangle(cornerRadius: 16))
-                           .shadow(color: neonCyan.opacity(0.6), radius: 30)
-                       
-                       // Holographic Scanner Line
-                       Rectangle()
-                           .fill(neonCyan.opacity(0.4))
-                           .frame(width: 240, height: 2)
-                           .offset(y: phase == 2 ? 100 : -100)
-                           .animation(.linear(duration: 2).repeatForever(autoreverses: true), value: phase)
-                   }
-                   .padding(.top, 40)
-                   
-                   Text("SYNCING HARDWARE: \(device.name)")
-                       .font(.system(size: 16, weight: .bold, design: .monospaced))
-                       .foregroundColor(.white)
-                       .tracking(2)
-                   
-                   // Connection Steps
-                   VStack(alignment: .leading, spacing: 12) {
-                       ForEach(0..<instructions.count, id: \.self) { idx in
-                           HStack(spacing: 12) {
-                               Rectangle()
-                                   .fill(idx <= instructionIndex ? neonCyan : Color.gray.opacity(0.2))
-                                   .frame(width: 4, height: 25)
-                               
-                               VStack(alignment: .leading, spacing: 2) {
-                                   Text("STEP 0\(idx + 1)")
-                                       .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                       .foregroundColor(idx <= instructionIndex ? neonCyan : .gray)
-                                   Text(instructions[idx])
-                                       .font(.system(size: 11, design: .monospaced))
-                                       .foregroundColor(idx <= instructionIndex ? .white : .gray.opacity(0.5))
-                               }
-                               
-                               Spacer()
-                               
-                               if idx <= instructionIndex {
-                                   Image(systemName: "bolt.fill")
-                                       .foregroundColor(neonCyan)
-                                       .font(.system(size: 12))
-                               }
-                           }
-                           .padding(.vertical, 4)
-                           .opacity(idx <= instructionIndex ? 1 : 0.3)
-                       }
-                   }
-                   .padding(15)
-                   .background(Color.white.opacity(0.03))
-                   .cornerRadius(10)
-                   .padding(.horizontal, 25)
-                   
-                   if instructionIndex == instructions.count - 1 {
-                       Button(action: {
-                           onComplete()
-                           isPresented = false
-                       }) {
-                           HStack {
-                               Image(systemName: "checkmark.shield.fill")
-                               Text("INITIALIZE LINK")
-                           }
-                           .font(.system(size: 13, weight: .bold, design: .monospaced))
-                           .foregroundColor(.black)
-                           .padding(.horizontal, 35)
-                           .padding(.vertical, 14)
-                           .background(neonCyan)
-                           .cornerRadius(8)
-                       }
-                       .padding(.bottom, 20)
-                   }
-               }
-               .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
+                VStack(spacing: 25) {
+                    ZStack {
+                        ForEach(0..<3, id: \.self) { i in
+                            Circle()
+                                .stroke(neonCyan.opacity(0.2), lineWidth: 1)
+                                .frame(width: CGFloat(220 + i * 40))
+                                .scaleEffect(1.1)
+                        }
+                        
+                        Image(device.imageName)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 180, height: 180)
+                            .background(Color.black)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                            .shadow(color: neonCyan.opacity(0.6), radius: 30)
+                        
+                        Rectangle()
+                            .fill(neonCyan.opacity(0.4))
+                            .frame(width: 240, height: 2)
+                            .offset(y: showHardware ? 100 : -100)
+                            .animation(.linear(duration: 2).repeatForever(autoreverses: true), value: showHardware)
+                    }
+                    .padding(.top, 40)
+                    
+                    Text("SYNCING: \(device.name)")
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .tracking(2)
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        ForEach(0..<instructions.count, id: \.self) { idx in
+                            HStack(spacing: 12) {
+                                Rectangle()
+                                    .fill(idx <= instructionIndex ? neonCyan : Color.gray.opacity(0.2))
+                                    .frame(width: 4, height: 25)
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("STEP 0\(idx + 1)")
+                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                        .foregroundColor(idx <= instructionIndex ? neonCyan : .gray)
+                                    Text(instructions[idx])
+                                        .font(.system(size: 11, design: .monospaced))
+                                        .foregroundColor(idx <= instructionIndex ? .white : .gray.opacity(0.5))
+                                }
+                                
+                                Spacer()
+                                
+                                if idx <= instructionIndex {
+                                    Image(systemName: "bolt.fill")
+                                        .foregroundColor(neonCyan)
+                                        .font(.system(size: 12))
+                                }
+                            }
+                            .padding(.vertical, 4)
+                            .opacity(idx <= instructionIndex ? 1 : 0.3)
+                        }
+                    }
+                    .padding(15)
+                    .background(Color.white.opacity(0.03))
+                    .cornerRadius(10)
+                    .padding(.horizontal, 25)
+                    
+                    if instructionIndex == instructions.count - 1 {
+                        Button(action: {
+                            onComplete()
+                            isPresented = false
+                        }) {
+                            HStack {
+                                Image(systemName: "checkmark.shield.fill")
+                                Text("INITIALIZE LINK")
+                            }
+                            .font(.system(size: 13, weight: .bold, design: .monospaced))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 35)
+                            .padding(.vertical, 14)
+                            .background(neonCyan)
+                            .cornerRadius(8)
+                        }
+                        .padding(.bottom, 20)
+                    }
+                }
+                .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
             }
         }
         .onAppear {
-            startHeavyAnimation()
+            startScanAnimation()
+        }
+        .onAppear {
+            startScanAnimation()
         }
     }
     
@@ -1725,53 +1720,15 @@ struct HardwareInterfacingView: View {
         }
     }
     
-    private func startHeavyAnimation() {
-        withAnimation(.easeIn(duration: 0.5)) {
-            backgroundOpacity = 1.0
-        }
-        
-        // Spawn Background Data Stream (CROWDY)
-        Task { @MainActor in
-            while true {
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
-                guard !Task.isCancelled else { break }
-                if phase == 2 && instructionIndex == instructions.count - 1 { break }
-                
-                let packet = DataStreamPacket(
-                    content: ["0", "1", "<>", "SYNC", "HEX", "DATA", "X86", "ARM"].randomElement()!,
-                    position: CGPoint(x: CGFloat.random(in: 0...400), y: -50),
-                    size: CGFloat.random(in: 10...40),
-                    opacity: Double.random(in: 0.05...0.2),
-                    duration: Double.random(in: 2...5)
-                )
-                dataStreams.append(packet)
-                if dataStreams.count > 50 { dataStreams.removeFirst() }
-            }
-        }
-        
-        // Throw Windows Immediately
-        let screenTitles = ["KERNEL_X01", "SYSCALL_EXT", "DUMP_0xFF", "SIGNAL_AN", "MESH_MAP", "PROXY_SET", "GATEWAY"]
-        Task { @MainActor in
-            for i in 0..<screenTitles.count {
-                try? await Task.sleep(nanoseconds: 150_000_000) // 0.15s
-                let newPopup = InterfacingPopup(
-                    title: screenTitles[i],
-                    offset: CGSize(width: CGFloat.random(in: -120...120), height: CGFloat.random(in: -250...250))
-                )
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                    popups.append(newPopup)
-                    let impact = UIImpactFeedbackGenerator(style: .medium)
-                    impact.impactOccurred()
-                }
-            }
-            
-            // Final Transition to Image
-            try? await Task.sleep(nanoseconds: 1_450_000_000) // Adjust to reach 2.5s total approx
-            withAnimation(.spring()) {
-                popups.removeAll()
+    private func startScanAnimation() {
+        // Show device immediately without animation overload
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
                 showHardware = true
-                phase = 2
             }
+            AudioServicesPlaySystemSound(1322) // Dhoom equivalent success sound
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
             startInstructionCycle()
         }
     }
@@ -1779,10 +1736,9 @@ struct HardwareInterfacingView: View {
     private func startInstructionCycle() {
         Task { @MainActor in
             for i in 1..<instructions.count {
-                try? await Task.sleep(nanoseconds: 1_200_000_000) // 1.2s
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
                 withAnimation { instructionIndex = i }
-                let impact = UIImpactFeedbackGenerator(style: .medium)
-                impact.impactOccurred()
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }
         }
     }
@@ -1805,42 +1761,35 @@ struct InterfacingPopup: Identifiable {
 
 struct InterfacingPopupView: View {
     let popup: InterfacingPopup
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(popup.title)
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(neonCyan)
+                Text(popup.title).bold()
                 Spacer()
-                Circle().fill(neonCyan).frame(width: 5, height: 5)
+                Text("X").foregroundColor(.white).bold()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(neonCyan.opacity(0.2))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.red)
+            .foregroundColor(.black)
+            .font(.system(size: 10, design: .monospaced))
             
-            Rectangle()
-                .fill(Color.black.opacity(0.9))
-                .frame(height: 70)
-                .overlay(
-                    VStack(alignment: .leading, spacing: 3) {
-                        ForEach(0..<5) { _ in
-                            Capsule()
-                                .fill(neonCyan.opacity(0.3))
-                                .frame(width: CGFloat.random(in: 20...110), height: 3)
-                        }
-                    }
-                    .padding(10)
-                )
+            Text("ERR: SYS_FAULT\nDATA CORRUPTED\nMEM_ADDR UNKNOWN")
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundColor(.red)
+                .padding(8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.black.opacity(0.8))
         }
-        .frame(width: 140)
-        .cornerRadius(6)
-        .overlay(RoundedRectangle(cornerRadius: 6).stroke(neonCyan.opacity(0.5), lineWidth: 1.5))
+        .frame(width: 150)
+        .border(Color.red, width: 2)
+        .shadow(color: .red, radius: 10)
         .offset(popup.offset)
-        .transition(.scale.combined(with: .move(edge: .bottom)))
+        .transition(.scale(scale: 0.1).combined(with: .opacity))
     }
 }
+
 
 // MARK: - Device Hologram View (Realistic Hardware Rendering)
 struct DeviceHologramView: View {

@@ -7,6 +7,8 @@ struct OnboardingView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var currentPage = 0
     @State private var nameInput = ""
+    @State private var passkeyInput = ""
+    @State private var showPasskeySetup = false
     @State private var showGreeting = false
     @State private var greetingText = ""
     @Environment(\.dismiss) var dismiss
@@ -224,7 +226,7 @@ struct OnboardingView: View {
             }
             
             // Greeting overlay
-            if showGreeting {
+            if showGreeting && !showPasskeySetup {
                 Color.black.opacity(0.8)
                     .ignoresSafeArea()
                     .transition(.opacity)
@@ -248,8 +250,68 @@ struct OnboardingView: View {
                 .opacity(showGreeting ? 1.0 : 0)
                 .transition(.scale.combined(with: .opacity))
             }
+            
+            // Passkey setup overlay
+            if showPasskeySetup {
+                Color.black.opacity(0.92)
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+                
+                VStack(spacing: 24) {
+                    Image(systemName: "lock.rectangle.on.rectangle")
+                        .font(.system(size: 55))
+                        .foregroundColor(neonCyan)
+                        .shadow(color: neonCyan.opacity(0.8), radius: 15)
+                    
+                    Text("VAULT INITIALIZATION")
+                        .font(.system(size: 24, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                    
+                    Text("Set up a secret numeric passkey for the hidden lab module. (Used in Calculator)")
+                        .font(.system(size: 14, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.gray)
+                        .padding(.horizontal, 40)
+                    
+                    SecureField("0000", text: $passkeyInput)
+                        .keyboardType(.numberPad)
+                        .font(.system(size: 28, weight: .bold, design: .monospaced))
+                        .multilineTextAlignment(.center)
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color.white.opacity(0.05))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(passkeyInput.isEmpty ? Color.gray.opacity(0.3) : neonCyan, lineWidth: 1)
+                        )
+                        .foregroundColor(neonCyan)
+                        .padding(.horizontal, 60)
+                    
+                    Button(action: {
+                        savePasskeyAndProceed()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "lock.shield.fill")
+                                .font(.system(size: 18))
+                            Text("SECURE & CONTINUE")
+                                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        }
+                        .foregroundColor(passkeyInput.isEmpty ? .gray : .black)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 40)
+                        .background(passkeyInput.isEmpty ? Color.gray.opacity(0.3) : neonCyan)
+                        .cornerRadius(12)
+                        .shadow(color: passkeyInput.isEmpty ? .clear : neonCyan.opacity(0.4), radius: 10)
+                    }
+                    .disabled(passkeyInput.isEmpty)
+                }
+                .transition(.scale.combined(with: .opacity))
+            }
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: showGreeting)
+        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: showPasskeySetup)
     }
     
     private func saveName() {
@@ -258,19 +320,37 @@ struct OnboardingView: View {
         // Play a chime sound
         AudioServicesPlaySystemSound(1054)
         
-        // Show time-based greeting
-        greetingText = timeBasedGreeting + ","
-        showGreeting = true
+        // Instantly pop up the secret passkey setup
+        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+            showPasskeySetup = true
+        }
+    }
+    
+    private func savePasskeyAndProceed() {
+        guard !passkeyInput.isEmpty else { return }
         
-        // Speak greeting aloud
-        speakGreeting()
+        UserDefaults.standard.set(passkeyInput, forKey: "SecretVaultPasskey")
         
-        // Auto-advance to permissions page after 2 seconds
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
-            showGreeting = false
-            withAnimation(.easeInOut(duration: 0.5)) {
-                currentPage = 3
+        // Play a lock sound
+        AudioServicesPlaySystemSound(1306)
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            showPasskeySetup = false
+        }
+        
+        // Show time-based greeting after a brief delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            greetingText = timeBasedGreeting + ","
+            showGreeting = true
+            speakGreeting()
+            
+            // Auto-advance to permissions page
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                showGreeting = false
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    currentPage = 3
+                }
             }
         }
     }

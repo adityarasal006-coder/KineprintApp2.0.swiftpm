@@ -246,36 +246,47 @@ struct CurrentMathChallengeView: View {
 
 struct MathInsightView: View {
     @ObservedObject var mathManager: MathChallengeManager
+    @State private var showLibrary = false
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: "rectangle.portrait.on.rectangle.portrait.fill")
-                    .foregroundColor(neonCyan)
-                Text("REVISION_FLASHCARD")
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(neonCyan)
+        Button(action: {
+            let generator = UIImpactFeedbackGenerator(style: .medium)
+            generator.impactOccurred()
+            showLibrary = true
+        }) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Image(systemName: "rectangle.portrait.on.rectangle.portrait.fill")
+                        .foregroundColor(neonCyan)
+                    Text("REVISION_FLASHCARD")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(neonCyan)
+                }
+                Text(currentInsight)
+                    .font(.system(size: 14, design: .monospaced))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.leading)
+                    .animation(.easeInOut, value: mathManager.selectedChallengeType)
+                
+                HStack {
+                    Spacer()
+                    Text(mathManager.selectedChallengeType?.formula ?? "SELECT")
+                        .font(.system(size: 16, weight: .bold, design: .serif))
+                        .foregroundColor(.orange)
+                }
             }
-            Text(currentInsight)
-                .font(.system(size: 14, design: .monospaced))
-                .foregroundColor(.white)
-                .animation(.easeInOut, value: mathManager.selectedChallengeType)
-            
-            HStack {
-                Spacer()
-                Text(mathManager.selectedChallengeType?.formula ?? "SELECT")
-                    .font(.system(size: 16, weight: .bold, design: .serif))
-                    .foregroundColor(.orange)
-            }
+            .padding(24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.black.opacity(0.8))
+            .cornerRadius(20)
+            .overlay(RoundedRectangle(cornerRadius: 20).stroke(neonCyan.opacity(0.4), lineWidth: 2))
+            .padding(.horizontal, 16)
+            .shadow(color: neonCyan.opacity(0.2), radius: 10)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.8))
-        .cornerRadius(20)
-        .overlay(RoundedRectangle(cornerRadius: 20).stroke(neonCyan.opacity(0.4), lineWidth: 2))
-        .padding(.horizontal, 16)
-        .shadow(color: neonCyan.opacity(0.2), radius: 10)
+        .fullScreenCover(isPresented: $showLibrary) {
+            ResearchLibraryView(viewModel: KineprintViewModel(), initialTopic: "MATHEMATICS")
+        }
     }
     
     private var currentInsight: String {
