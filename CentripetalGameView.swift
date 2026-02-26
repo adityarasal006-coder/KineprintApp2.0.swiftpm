@@ -4,6 +4,7 @@ import SwiftUI
 // MARK: - Centripetal Force Game
 // Concept: Fc = (m * v^2) / r. Balancing rotation parameters for stable orbit.
 
+@MainActor
 struct CentripetalGameView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var score: Int
@@ -24,6 +25,8 @@ struct CentripetalGameView: View {
     @State private var streak = 0
     @State private var totalScore = 0
     @State private var thinkingLog: [String] = ["ORBIT_CORE: ACTIVE", "SCANNING_RADIAL_VECTORS"]
+    @State private var showCalcOverlay = true
+    @State private var showBadgeOverlay = false
     
     // Required Force for the level
     private var requiredForce: Double {
@@ -206,11 +209,38 @@ struct CentripetalGameView: View {
                                     .padding(.horizontal, 16)
                             }
                             
+                            // Step Calculation Box
+                            GameCalcOverlay(
+                                title: "CENTRIPETAL_CALC",
+                                steps: {
+                                    let fc = mass * velocity * velocity / max(radius / 100.0, 0.1)
+                                    let omega = velocity / max(radius / 100.0, 0.1)
+                                    let period = 2 * .pi / max(omega, 0.01)
+                                    return [
+                                        (label: "r (meters)", value: String(format: "%.2f", radius / 100.0) + " m"),
+                                        (label: "Fc = mv²/r", value: String(format: "%.1f", fc) + " N"),
+                                        (label: "ω = v/r", value: String(format: "%.2f", omega) + " rad/s"),
+                                        (label: "T = 2π/ω", value: String(format: "%.2f", period) + " s"),
+                                        (label: "Target Fc", value: String(format: "%.1f", requiredForce) + " N"),
+                                        (label: "ΔF (error)", value: String(format: "%.1f", abs(fc - requiredForce)) + " N"),
+                                    ]
+                                }(),
+                                isVisible: $showCalcOverlay
+                            )
+                            .padding(.horizontal, 16)
+                            
                             Spacer().frame(height: 40)
                         }
                         .padding(.top, 20)
                     }
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $showBadgeOverlay) {
+            BadgeEarnedOverlay(badgeName: "Centripetal Commander") {
+                showBadgeOverlay = false
+                level = 1
+                reset()
             }
         }
     }
@@ -265,8 +295,17 @@ struct CentripetalGameView: View {
     }
     
     private func nextLevel() {
-        level = min(level + 1, 10)
-        reset()
+        if level >= 10 {
+            GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 6, badge: "Centripetal Commander")
+            showResult = false
+            showBadgeOverlay = true
+        } else {
+            level += 1
+            if level > 3 {
+                GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 6, badge: "Centripetal Commander")
+            }
+            reset()
+        }
     }
     
     private func reset() {

@@ -1,12 +1,32 @@
 import SwiftUI
 
+struct LogItem: Identifiable {
+    let id = UUID()
+    let time: String
+    let msg: String
+    let type: SystemLogEntry.LogType
+}
+
+@MainActor
 struct HomeDashboardView: View {
     @ObservedObject var viewModel: KineprintViewModel
-    @State private var showingResearch = false
+    @State private var showingAnalytics = false
+    @State private var showingLidarConfig = false
+    @State private var showingLidarDiagnostics = false
+    @State private var showingLidarCalibration = false
+    @State private var showingAbout = false
     @State private var scanlineOffset: CGFloat = 0
     @State private var headerGlitch = false
     @State private var statusPulse = false
     @State private var terminalCursor = true
+    
+    @State private var systemLogs: [LogItem] = [
+        LogItem(time: "14:02:41", msg: "Booting KINEPRINT OS v2.0...", type: .normal),
+        LogItem(time: "14:02:42", msg: "Kernel Initialized ✓", type: .success),
+        LogItem(time: "14:02:43", msg: "Loading neural modules...", type: .normal),
+        LogItem(time: "14:02:44", msg: "LiDAR Matrix Calibrated ✓", type: .success),
+        LogItem(time: "14:02:45", msg: "All subsystems nominal ✓", type: .success)
+    ]
     
     private let draftBlue = Color(red: 0.02, green: 0.08, blue: 0.15)
     private let neonCyan = Color(red: 0.0, green: 0.85, blue: 1.0)
@@ -65,9 +85,17 @@ struct HomeDashboardView: View {
                                     .font(.system(size: 10, weight: .black, design: .monospaced))
                                     .foregroundColor(.green)
                             }
-                            Text("V2.0.4-BUILD")
-                                .font(.system(size: 10, design: .monospaced))
-                                .foregroundColor(.gray)
+                            HStack(spacing: 8) {
+                                Text("V2.1.0-PROTO")
+                                    .font(.system(size: 10, design: .monospaced))
+                                    .foregroundColor(.gray)
+                                
+                                Button(action: { showingAbout = true }) {
+                                    Image(systemName: "info.circle.fill")
+                                        .foregroundColor(neonCyan)
+                                        .font(.system(size: 14))
+                                }
+                            }
                             Text(currentTimeString())
                                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                                 .foregroundColor(neonCyan.opacity(0.5))
@@ -125,32 +153,42 @@ struct HomeDashboardView: View {
                             value: viewModel.lidarAvailable ? "ACTIVE" : "STANDBY",
                             statusColor: viewModel.lidarAvailable ? .green : .orange,
                             icon: "point.3.connected.trianglepath.dotted"
-                        )
+                        ) {
+                            showingLidarConfig = true
+                        }
                         DiagnosticWidget(
                             title: "BLUETOOTH",
                             value: "MONITORING",
                             statusColor: neonCyan,
                             icon: "antenna.radiowaves.left.and.right"
-                        )
+                        ) {
+                            let urlStrings = ["App-Prefs:root=Bluetooth", "App-prefs:Bluetooth", UIApplication.openSettingsURLString]
+                            for urlString in urlStrings {
+                                if let url = URL(string: urlString), UIApplication.shared.canOpenURL(url) {
+                                    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                                    break
+                                }
+                            }
+                        }
                     }
                     .padding(.horizontal, 20)
                     
-                    // ═══ FIELD DATA ARCHIVE ═══
-                    Button(action: { showingResearch = true }) {
+                    // ═══ PERFORMANCE ANALYTICS ═══
+                    Button(action: { showingAnalytics = true }) {
                         HStack {
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack(spacing: 8) {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 8).fill(neonCyan.opacity(0.15))
                                             .frame(width: 32, height: 32)
-                                        Image(systemName: "server.rack")
+                                        Image(systemName: "chart.xyaxis.line")
                                             .foregroundColor(neonCyan)
                                     }
-                                    Text("FIELD DATA ARCHIVE")
+                                    Text("PERFORMANCE ANALYTICS")
                                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                                         .foregroundColor(.white)
                                 }
-                                Text("\(viewModel.publishedPapers.count) PUBLICATION(S) LOGGED")
+                                Text("GLOBAL DATA CENTER VISUALIZATION")
                                     .font(.system(size: 10, design: .monospaced))
                                     .foregroundColor(neonCyan.opacity(0.8))
                             }
@@ -192,11 +230,9 @@ struct HomeDashboardView: View {
                         .background(Color(red: 0.1, green: 0.1, blue: 0.12))
                         
                         VStack(alignment: .leading, spacing: 0) {
-                            SystemLogEntry(time: "14:02:41", msg: "Booting KINEPRINT OS v2.0...", type: .normal)
-                            SystemLogEntry(time: "14:02:42", msg: "Kernel Initialized ✓", type: .success)
-                            SystemLogEntry(time: "14:02:43", msg: "Loading neural modules...", type: .normal)
-                            SystemLogEntry(time: "14:02:44", msg: "LiDAR Matrix Calibrated ✓", type: .success)
-                            SystemLogEntry(time: "14:02:45", msg: "All subsystems nominal ✓", type: .success)
+                            ForEach(systemLogs) { log in
+                                SystemLogEntry(time: log.time, msg: log.msg, type: log.type)
+                            }
                             
                             // Blinking cursor line
                             HStack(spacing: 0) {
@@ -245,8 +281,30 @@ struct HomeDashboardView: View {
                 }
             }
         }
-        .sheet(isPresented: $showingResearch) {
-             ResearchLibraryView(viewModel: viewModel)
+        .fullScreenCover(isPresented: $showingAnalytics) {
+             PerformanceAnalyticsView(isPresented: $showingAnalytics)
+        }
+        .alert("LiDAR Subsystem Config", isPresented: $showingLidarConfig) {
+            Button("Run Diagnostics") {
+                addLog(msg: "Initiating LiDAR diagnostics...", type: .normal)
+                showingLidarDiagnostics = true
+            }
+            Button("Calibrate Matrix") {
+                addLog(msg: "Executing spatial recalibration...", type: .normal)
+                showingLidarCalibration = true
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("The LiDAR depth matrix is currently \(viewModel.lidarAvailable ? "ACTIVE" : "in STANDBY"). Configure module settings internally here.")
+        }
+        .fullScreenCover(isPresented: $showingLidarDiagnostics) {
+            LidarDiagnosticsView()
+        }
+        .fullScreenCover(isPresented: $showingLidarCalibration) {
+            LidarCalibrationView()
+        }
+        .fullScreenCover(isPresented: $showingAbout) {
+            AboutProtocolView()
         }
     }
     
@@ -255,6 +313,16 @@ struct HomeDashboardView: View {
         formatter.dateFormat = "HH:mm:ss"
         return formatter.string(from: Date())
     }
+    
+    private func addLog(msg: String, type: SystemLogEntry.LogType) {
+        let newLog = LogItem(time: currentTimeString(), msg: msg, type: type)
+        withAnimation {
+            systemLogs.append(newLog)
+            if systemLogs.count > 5 {
+                systemLogs.removeFirst(systemLogs.count - 5)
+            }
+        }
+    }
 }
 
 struct DiagnosticWidget: View {
@@ -262,11 +330,16 @@ struct DiagnosticWidget: View {
     let value: String
     let statusColor: Color
     let icon: String
+    var action: (() -> Void)? = nil
+    
     @State private var pulse = false
     private let neonCyan = Color(red: 0.0, green: 0.85, blue: 1.0)
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        Button(action: {
+            action?()
+        }) {
+            VStack(alignment: .leading, spacing: 10) {
             HStack {
                 ZStack {
                     Circle().fill(statusColor.opacity(0.15)).frame(width: 32, height: 32)
@@ -310,6 +383,8 @@ struct DiagnosticWidget: View {
                 .stroke(statusColor.opacity(0.3), lineWidth: 1)
         )
         .shadow(color: statusColor.opacity(0.08), radius: 5)
+        }
+        .buttonStyle(PlainButtonStyle())
         .onAppear {
             withAnimation(Animation.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                 pulse = true

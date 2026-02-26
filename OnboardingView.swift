@@ -3,6 +3,7 @@ import SwiftUI
 import AudioToolbox
 import AVFoundation
 
+@MainActor
 struct OnboardingView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var currentPage = 0
@@ -197,7 +198,15 @@ struct OnboardingView: View {
                         
                         Button(action: {
                             if !nameInput.isEmpty {
-                                viewModel.completeOnboarding(with: nameInput)
+                                let name = nameInput.trimmingCharacters(in: .whitespaces)
+                                // Use the shared AI voice for a premium feel
+                                VoiceManager.shared.speak("Welcome, \(name) buddy! Initializing Kinematic Lab now.")
+                                
+                                Task { @MainActor in
+                                    // Brief pause so the voice starts before the matrix animation
+                                    try? await Task.sleep(nanoseconds: 800_000_000)
+                                    viewModel.completeOnboarding(with: nameInput)
+                                }
                             }
                         }) {
                             Text("ENTER THE LAB")
@@ -338,11 +347,11 @@ struct OnboardingView: View {
             showPasskeySetup = false
         }
         
-        // Show time-based greeting after a brief delay
+        // Show visual greeting overlay after a brief delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             greetingText = timeBasedGreeting + ","
             showGreeting = true
-            speakGreeting()
+            // Removed speakGreeting here to prevent overlap and voice mismatch
             
             // Auto-advance to permissions page
             Task { @MainActor in
@@ -355,18 +364,6 @@ struct OnboardingView: View {
         }
     }
     
-    private func speakGreeting() {
-        let synthesizer = AVSpeechSynthesizer()
-        let name = nameInput.trimmingCharacters(in: .whitespaces)
-        let greeting = timeBasedGreeting
-        let text = "\(greeting), \(name)! Welcome to KinePrint. We are waiting for you to come back again!"
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        utterance.pitchMultiplier = 1.1
-        utterance.rate = 0.50
-        utterance.volume = 0.9
-        synthesizer.speak(utterance)
-    }
 }
 
 // MARK: - Animated LiDAR Scan Icon

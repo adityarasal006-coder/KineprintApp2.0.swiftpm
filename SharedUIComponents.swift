@@ -298,3 +298,16 @@ public struct BlueprintDataNode: View {
         .frame(minWidth: 100, alignment: .leading)
     }
 }
+// MARK: - View Extensions
+extension View {
+    @ViewBuilder
+    public func legacyOnChange<V>(of value: V, perform action: @escaping (V) -> Void) -> some View where V: Equatable {
+        if #available(iOS 17.0, *) {
+            self.onChange(of: value) { _, newValue in
+                action(newValue)
+            }
+        } else {
+            self.onChange(of: value, perform: action)
+        }
+    }
+}

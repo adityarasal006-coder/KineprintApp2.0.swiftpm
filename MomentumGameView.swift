@@ -27,6 +27,8 @@ struct MomentumGameView: View {
     @State private var thinkingLog: [String] = ["CORE_INIT: MOMENTUM_LAB", "AWAITING_VECTOR_INPUT"]
     @State private var finalPos: CGFloat = 0
     @State private var canvasWidth: CGFloat = 300
+    @State private var showCalcOverlay = true
+    @State private var showBadgeOverlay = false
     
     // Level target zone (x coordinate and width)
     private var targetZone: (x: CGFloat, width: CGFloat) {
@@ -179,6 +181,14 @@ struct MomentumGameView: View {
                                     .padding(.horizontal, 16)
                             }
                             
+                            // Step Calculation Box
+                            GameCalcOverlay(
+                                title: "MOMENTUM_CALC",
+                                steps: momentumCalcSteps,
+                                isVisible: $showCalcOverlay
+                            )
+                            .padding(.horizontal, 16)
+                            
                             Spacer().frame(height: 40)
                         }
                         .padding(.top, 20)
@@ -186,6 +196,28 @@ struct MomentumGameView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showBadgeOverlay) {
+            BadgeEarnedOverlay(badgeName: "Momentum Master") {
+                showBadgeOverlay = false
+                level = 1
+                targetMass = Double.random(in: 2.0...8.0)
+                resetSim()
+            }
+        }
+    }
+    
+    private var momentumCalcSteps: [(label: String, value: String)] {
+        let pA = strikerMass * strikerVelocity
+        let vB_after = (2 * strikerMass * strikerVelocity) / (strikerMass + targetMass)
+        let vA_after = ((strikerMass - targetMass) / (strikerMass + targetMass)) * strikerVelocity
+        return [
+            (label: "p_A = m_A × v_A", value: "\(String(format: "%.1f", strikerMass)) × \(String(format: "%.1f", strikerVelocity)) = \(String(format: "%.1f", pA)) kg·m/s"),
+            (label: "p_B = m_B × 0", value: "0 kg·m/s"),
+            (label: "p_total", value: "\(String(format: "%.1f", pA)) kg·m/s"),
+            (label: "v_B' (elastic)", value: "\(String(format: "%.2f", vB_after)) m/s"),
+            (label: "v_A' (elastic)", value: "\(String(format: "%.2f", vA_after)) m/s"),
+            (label: "p_conservation", value: "\(String(format: "%.1f", strikerMass * vA_after + targetMass * vB_after)) kg·m/s ✓"),
+        ]
     }
     
     private func launchStriker() {
@@ -250,9 +282,18 @@ struct MomentumGameView: View {
     }
     
     private func nextLevel() {
-        level = min(level + 1, 10)
-        targetMass = Double.random(in: 2.0...8.0)
-        resetSim()
+        if level >= 10 {
+            GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 4, badge: "Momentum Master")
+            showResult = false
+            showBadgeOverlay = true
+        } else {
+            level += 1
+            if level > 3 {
+                GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 4, badge: "Momentum Master")
+            }
+            targetMass = Double.random(in: 2.0...8.0)
+            resetSim()
+        }
     }
     
     private func resetSim() {

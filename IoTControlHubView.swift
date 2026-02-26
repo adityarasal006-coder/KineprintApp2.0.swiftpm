@@ -2,17 +2,17 @@ import SwiftUI
 import CoreBluetooth
 import AudioToolbox
 
+@MainActor
 struct IoTControlHubView: View {
     @StateObject private var bluetoothManager = BluetoothManager()
     @State private var showingConnectionSheet = false
     @State private var selectedDevice: IoTDevice?
-    @State private var activeTab: IoTTab = .devices
+    @State private var activeTab: IoTTab = .components
     @State private var showSettings = false
     @State private var isInterfacing = false
     @State private var selectedInterfacingDevice: IoTDevice?
     
     enum IoTTab: String {
-        case devices = "DEVICES"
         case components = "COMPONENTS"
         case training = "TRAINING"
     }
@@ -54,7 +54,7 @@ struct IoTControlHubView: View {
                     
                     // Custom Tab Bar
                     HStack(spacing: 0) {
-                        ForEach([IoTTab.devices, .components, .training], id: \.self) { tab in
+                        ForEach([IoTTab.components, .training], id: \.self) { tab in
                             Button(action: { 
                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                     activeTab = tab 
@@ -86,18 +86,7 @@ struct IoTControlHubView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                     
-                    if activeTab == .devices {
-                        // Device Discovery Panel
-                        DeviceDiscoveryPanel(bluetoothManager: bluetoothManager, 
-                                             selectedDevice: $selectedDevice,
-                                             isInterfacing: $isInterfacing,
-                                             interfacingDevice: $selectedInterfacingDevice)
-                        
-                        // Robot Controls Section
-                        if let selectedDevice = selectedDevice {
-                            RobotControlPanel(device: selectedDevice, bluetoothManager: bluetoothManager)
-                        }
-                    } else if activeTab == .components {
+                    if activeTab == .components {
                         IoTComponentLibraryView()
                     } else if activeTab == .training {
                         IoTLearningGameView()

@@ -93,6 +93,9 @@ struct LearningLabView: View {
                             onSelectEnergy: { showEnergyGame = true }
                         )
                         
+                        // Physics Progress Tracker
+                        PhysicsProgressTracker()
+                        
                         // Main Dashboard Section
                         VStack(spacing: 20) {
                             CurrentChallengeView(challenge: challengeManager.currentChallenge, challengeManager: challengeManager)
@@ -167,6 +170,88 @@ struct LabHeaderView: View {
     }
 }
 
+// MARK: - Physics Progress Tracker
+struct PhysicsProgressTracker: View {
+    @AppStorage("unlockedPhysicsGamesCount") private var unlockedPhysicsCount = 3
+    @State private var earnedBadges: [String] = []
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    private let physicsBadges = [
+        "Trajectory Master", "Velocity Maestro", "Oscillation Expert",
+        "Landing Specialist", "Momentum Master", "Collision Analyst",
+        "Centripetal Commander", "Energy Harvester"
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "atom")
+                    .foregroundColor(neonCyan)
+                Text("SIMULATION_PROGRESS")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(neonCyan)
+                Spacer()
+                Text("\(min(unlockedPhysicsCount, 8))/8 ACTIVE")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(.green)
+            }
+            
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(neonCyan)
+                        .frame(width: geo.size.width * CGFloat(min(unlockedPhysicsCount, 8)) / 8.0)
+                        .shadow(color: neonCyan.opacity(0.5), radius: 6)
+                }
+            }
+            .frame(height: 6)
+            
+            // Badges
+            if !earnedBadges.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(physicsBadges, id: \.self) { badge in
+                            let isEarned = earnedBadges.contains(badge)
+                            HStack(spacing: 4) {
+                                Image(systemName: isEarned ? "star.circle.fill" : "lock.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(isEarned ? neonCyan : .gray.opacity(0.4))
+                                Text(badge.uppercased())
+                                    .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                    .foregroundColor(isEarned ? .white : .gray.opacity(0.4))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(isEarned ? neonCyan.opacity(0.1) : Color.white.opacity(0.03))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(isEarned ? neonCyan.opacity(0.4) : Color.white.opacity(0.05), lineWidth: 1)
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text("Complete simulations to earn badges")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(16)
+        .background(Color.black.opacity(0.6))
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(neonCyan.opacity(0.2), lineWidth: 1))
+        .padding(.horizontal, 16)
+        .onAppear {
+            earnedBadges = UserDefaults.standard.stringArray(forKey: "EarnedBadgesArray") ?? []
+        }
+    }
+}
+
 struct ChallengeSelectionView: View {
     @ObservedObject var challengeManager: ChallengeManager
     let onSelectTrajectory: () -> Void
@@ -178,6 +263,7 @@ struct ChallengeSelectionView: View {
     let onSelectCentripetal: () -> Void
     let onSelectEnergy: () -> Void
     
+    @AppStorage("unlockedPhysicsGamesCount") private var unlockedPhysicsCount = 3
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
@@ -195,10 +281,11 @@ struct ChallengeSelectionView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    ForEach(ChallengeType.allCases, id: \.self) { type in
+                    ForEach(Array(ChallengeType.allCases.enumerated()), id: \.element) { index, type in
                         ChallengeCardView(
                             type: type,
                             isSelected: challengeManager.selectedChallengeType == type,
+                            isLocked: false,
                             action: {
                                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
                                     challengeManager.selectChallenge(type)
@@ -230,6 +317,7 @@ struct ChallengeSelectionView: View {
 struct ChallengeCardView: View {
     let type: ChallengeType
     let isSelected: Bool
+    let isLocked: Bool
     let action: () -> Void
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
@@ -242,38 +330,53 @@ struct ChallengeCardView: View {
                         .fill(isSelected ? neonCyan : Color.white.opacity(0.05))
                         .frame(width: 44, height: 44)
                     
-                    Image(systemName: type.icon)
+                    Image(systemName: isLocked ? "lock.fill" : type.icon)
                         .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(isSelected ? .black : .white)
+                        .foregroundColor(isSelected ? .black : (isLocked ? .red : .white))
                 }
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(type.rawValue.uppercased())
                         .font(.system(size: 11, weight: .black, design: .monospaced))
-                        .foregroundColor(isSelected ? neonCyan : .white)
-                    Text("PROB_SIM_LVL_\(Int.random(in: 1...5))")
+                        .foregroundColor(isSelected ? neonCyan : (isLocked ? .gray : .white))
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.8)
+                    Text("CONCEPT: \(type.concept)")
                         .font(.system(size: 7, weight: .bold, design: .monospaced))
                         .foregroundColor(.gray)
+                    Text("SUB: \(type.subtopic)")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundColor(.gray.opacity(0.8))
                 }
                 
                 Spacer()
                 
-                HStack {
-                    Text("ENGAGE_LINK")
+                if isLocked {
+                    Text("SECURE LEVEL")
                         .font(.system(size: 8, weight: .black, design: .monospaced))
-                        .foregroundColor(isSelected ? .black : neonCyan)
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(isSelected ? .black : neonCyan)
+                        .foregroundColor(.red)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(4)
+                } else {
+                    HStack {
+                        Text("ENGAGE_LINK")
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
+                            .foregroundColor(isSelected ? .black : neonCyan)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(isSelected ? .black : neonCyan)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(isSelected ? neonCyan : neonCyan.opacity(0.1))
+                    .cornerRadius(6)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .background(isSelected ? neonCyan : neonCyan.opacity(0.1))
-                .cornerRadius(6)
             }
             .padding(14)
-            .frame(width: 140, height: 160)
+            .frame(width: 140, height: 170)
             .background(
                 ZStack {
                     Color.black.opacity(0.6)
@@ -586,6 +689,32 @@ enum ChallengeType: String, CaseIterable {
         case .elasticCollision: return "arrow.up.and.down.and.sparkles"
         case .centripetalForce: return "rotate.right.fill"
         case .kineticEnergy: return "bolt.batteryblock.fill"
+        }
+    }
+    
+    var concept: String {
+        switch self {
+        case .matchTrajectory: return "Kinematics"
+        case .optimizeVelocity: return "Kinematics"
+        case .stabilizeOscillation: return "Energy & Waves"
+        case .landingPrediction: return "Forces"
+        case .momentumTransfer: return "Dynamics"
+        case .elasticCollision: return "Dynamics"
+        case .centripetalForce: return "Forces"
+        case .kineticEnergy: return "Energy & Waves"
+        }
+    }
+    
+    var subtopic: String {
+        switch self {
+        case .matchTrajectory: return "Projectile Motion"
+        case .optimizeVelocity: return "Constant Vel"
+        case .stabilizeOscillation: return "SHM Damping"
+        case .landingPrediction: return "1D Gravity"
+        case .momentumTransfer: return "Impulse"
+        case .elasticCollision: return "Energy Conserv."
+        case .centripetalForce: return "Circular Move."
+        case .kineticEnergy: return "Work-Energy"
         }
     }
 }

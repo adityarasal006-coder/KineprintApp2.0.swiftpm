@@ -304,15 +304,29 @@ struct ResultOverlay: View {
                             .background(Color.white.opacity(0.1))
                             .cornerRadius(10)
                     }
-                    Button(action: onNext) {
-                        Text("CONTINUE_EXP")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(.black)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(gradeColor)
-                            .cornerRadius(10)
-                            .shadow(color: gradeColor.opacity(0.3), radius: 8)
+                    
+                    if accuracy >= 0.8 {
+                        Button(action: onNext) {
+                            Text("CONTINUE_EXP")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(.black)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(gradeColor)
+                                .cornerRadius(10)
+                                .shadow(color: gradeColor.opacity(0.3), radius: 8)
+                        }
+                    } else {
+                        Button(action: {}) {
+                            Text("REQ 80% ACC")
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.3))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .background(Color.white.opacity(0.05))
+                                .cornerRadius(10)
+                        }
+                        .disabled(true)
                     }
                 }
             }
@@ -329,6 +343,184 @@ struct ResultOverlay: View {
         }
     }
 }
+
+// MARK: - Badge Earned Overlay (shown on game completion)
+struct BadgeEarnedOverlay: View {
+    let badgeName: String
+    let onContinue: () -> Void
+    
+    @State private var ringScale: CGFloat = 0.0
+    @State private var shieldScale: CGFloat = 0.0
+    @State private var textOpacity: Double = 0
+    @State private var glowPulse = false
+    @State private var particleRing: [BadgeParticle] = []
+    @State private var showButton = false
+    
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    private let gold = Color(red: 1, green: 0.84, blue: 0)
+    
+    var body: some View {
+        ZStack {
+            // Dim background
+            Color.black.opacity(0.92).ignoresSafeArea()
+            
+            // Particle ring
+            ForEach(particleRing.indices, id: \.self) { i in
+                Circle()
+                    .fill(i % 2 == 0 ? neonCyan : gold)
+                    .frame(width: particleRing[i].size, height: particleRing[i].size)
+                    .offset(x: particleRing[i].x, y: particleRing[i].y)
+                    .opacity(particleRing[i].opacity)
+            }
+            
+            VStack(spacing: 0) {
+                Spacer()
+                
+                // Glowing ring
+                ZStack {
+                    Circle()
+                        .stroke(neonCyan.opacity(0.15), lineWidth: 2)
+                        .frame(width: 180, height: 180)
+                        .scaleEffect(ringScale)
+                    
+                    Circle()
+                        .stroke(gold.opacity(0.1), lineWidth: 1)
+                        .frame(width: 200, height: 200)
+                        .scaleEffect(ringScale * 0.9)
+                    
+                    // Pulsing glow background
+                    Circle()
+                        .fill(
+                            RadialGradient(colors: [neonCyan.opacity(glowPulse ? 0.15 : 0.05), .clear],
+                                           center: .center, startRadius: 10, endRadius: 100)
+                        )
+                        .frame(width: 200, height: 200)
+                    
+                    // Shield icon
+                    VStack(spacing: 8) {
+                        Image(systemName: "shield.lefthalf.filled")
+                            .font(.system(size: 56, weight: .bold))
+                            .foregroundStyle(
+                                LinearGradient(colors: [gold, neonCyan], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .shadow(color: gold.opacity(0.6), radius: 15)
+                            .shadow(color: neonCyan.opacity(0.4), radius: 25)
+                    }
+                    .scaleEffect(shieldScale)
+                }
+                
+                Spacer().frame(height: 32)
+                
+                // "BADGE EARNED" title
+                VStack(spacing: 6) {
+                    Text("🏆")
+                        .font(.system(size: 28))
+                    
+                    Text("BADGE EARNED")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(gold.opacity(0.8))
+                        .tracking(4)
+                    
+                    Text("CONGRATULATIONS!")
+                        .font(.system(size: 26, weight: .black, design: .monospaced))
+                        .foregroundColor(.white)
+                        .shadow(color: neonCyan.opacity(0.5), radius: 10)
+                    
+                    Rectangle()
+                        .fill(LinearGradient(colors: [.clear, gold, .clear], startPoint: .leading, endPoint: .trailing))
+                        .frame(width: 200, height: 1)
+                        .padding(.vertical, 8)
+                    
+                    Text(badgeName.uppercased())
+                        .font(.system(size: 20, weight: .black, design: .monospaced))
+                        .foregroundStyle(
+                            LinearGradient(colors: [gold, neonCyan], startPoint: .leading, endPoint: .trailing)
+                        )
+                        .shadow(color: neonCyan.opacity(0.6), radius: 8)
+                    
+                    Text("All levels mastered. This badge has been\nadded to your collection.")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 6)
+                }
+                .opacity(textOpacity)
+                
+                Spacer().frame(height: 40)
+                
+                // Continue button
+                if showButton {
+                    Button(action: {
+                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                        impact.impactOccurred()
+                        onContinue()
+                    }) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "arrow.right.circle.fill")
+                                .font(.system(size: 14))
+                            Text("CONTINUE")
+                                .font(.system(size: 14, weight: .black, design: .monospaced))
+                        }
+                        .foregroundColor(.black)
+                        .padding(.horizontal, 40)
+                        .padding(.vertical, 16)
+                        .background(
+                            LinearGradient(colors: [gold, neonCyan], startPoint: .leading, endPoint: .trailing)
+                        )
+                        .cornerRadius(14)
+                        .shadow(color: gold.opacity(0.4), radius: 12)
+                        .shadow(color: neonCyan.opacity(0.3), radius: 20)
+                    }
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+                
+                Spacer()
+            }
+        }
+        .onAppear {
+            // Haptic celebration
+            let generator = UINotificationFeedbackGenerator()
+            generator.notificationOccurred(.success)
+            
+            // Generate particles
+            for i in 0..<20 {
+                let angle = Double(i) / 20.0 * 2 * .pi
+                let radius: CGFloat = 120
+                particleRing.append(BadgeParticle(
+                    x: cos(angle) * radius,
+                    y: sin(angle) * radius,
+                    size: CGFloat.random(in: 2...5),
+                    opacity: Double.random(in: 0.3...0.8)
+                ))
+            }
+            
+            // Staggered animations
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.6)) {
+                ringScale = 1.0
+            }
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.5).delay(0.2)) {
+                shieldScale = 1.0
+            }
+            withAnimation(.easeOut(duration: 0.6).delay(0.5)) {
+                textOpacity = 1.0
+            }
+            withAnimation(.easeInOut(duration: 1.5).repeatForever()) {
+                glowPulse = true
+            }
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(1.0)) {
+                showButton = true
+            }
+        }
+    }
+}
+
+struct BadgeParticle {
+    var x: CGFloat
+    var y: CGFloat
+    var size: CGFloat
+    var opacity: Double
+}
+
 struct ScientificSlider: View {
     let label: String
     @Binding var value: Double
@@ -456,6 +648,57 @@ struct ConfettiBurstView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Reusable Step Calculation Overlay for All Games
+struct GameCalcOverlay: View {
+    let title: String
+    let steps: [(label: String, value: String)]
+    @Binding var isVisible: Bool
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Button(action: { withAnimation { isVisible.toggle() } }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: isVisible ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8))
+                        Image(systemName: "function")
+                            .font(.system(size: 8))
+                        Text(title)
+                            .font(.system(size: 7, weight: .black, design: .monospaced))
+                    }
+                    .foregroundColor(neonCyan)
+                }
+                Spacer()
+            }
+            
+            if isVisible {
+                VStack(alignment: .leading, spacing: 3) {
+                    ForEach(Array(steps.enumerated()), id: \.offset) { idx, step in
+                        HStack(spacing: 4) {
+                            Text("\(idx + 1).")
+                                .font(.system(size: 7, weight: .bold, design: .monospaced))
+                                .foregroundColor(.gray)
+                            Text(step.label)
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.7))
+                            Spacer()
+                            Text(step.value)
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundColor(neonCyan)
+                        }
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(10)
+        .background(Color.black.opacity(0.8))
+        .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(neonCyan.opacity(0.3), lineWidth: 1))
     }
 }
 #endif

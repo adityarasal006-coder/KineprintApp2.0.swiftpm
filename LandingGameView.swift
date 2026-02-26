@@ -29,6 +29,8 @@ struct LandingGameView: View {
     @State private var canvasSize: CGSize = .zero
     @State private var streak = 0
     @State private var thinkingLog: [String] = ["SYSTEM_INIT: SUCCESS", "KINETIC_LINK: ESTABLISHED"]
+    @State private var showCalcOverlay = true
+    @State private var showBadgeOverlay = false
     
     @AppStorage("showVelocityVectors") var showVelocityVectors = true
     @AppStorage("showAccelerationVectors") var showAccelerationVectors = true
@@ -232,9 +234,33 @@ struct LandingGameView: View {
                         .background(Color.white.opacity(0.04))
                         .cornerRadius(24)
                         .padding(.horizontal, 16)
+                        
+                        // Step Calculation Box
+                        GameCalcOverlay(
+                            title: "LANDING_CALC",
+                            steps: [
+                                (label: "V₀", value: String(format: "%.1f", v0) + " m/s"),
+                                (label: "θ", value: String(format: "%.1f", angle) + "°"),
+                                (label: "Vx = V₀·cosθ", value: String(format: "%.2f", v0 * cos(angle * .pi / 180)) + " m/s"),
+                                (label: "Vy = V₀·sinθ", value: String(format: "%.2f", v0 * sin(angle * .pi / 180)) + " m/s"),
+                                (label: "T = 2Vy/g", value: String(format: "%.2f", timeOfFlight) + " s"),
+                                (label: "H = Vy²/(2g)", value: String(format: "%.2f", maxHeight) + " m"),
+                                (label: "R = V₀²sin(2θ)/g", value: String(format: "%.2f", range) + " m"),
+                            ],
+                            isVisible: $showCalcOverlay
+                        )
+                        .padding(.horizontal, 16)
+                        
                         .padding(.bottom, 20)
                     }
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $showBadgeOverlay) {
+            BadgeEarnedOverlay(badgeName: "Landing Specialist") {
+                showBadgeOverlay = false
+                level = 1
+                resetLevel()
             }
         }
     }
@@ -296,7 +322,19 @@ struct LandingGameView: View {
         }
     }
     
-    private func nextLevel() { level = min(level + 1, 10); resetLevel() }
+    private func nextLevel() {
+        if level >= 10 {
+            GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 3, badge: "Landing Specialist")
+            showResult = false
+            showBadgeOverlay = true
+        } else {
+            level += 1
+            if level > 3 {
+                GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 3, badge: "Landing Specialist")
+            }
+            resetLevel()
+        }
+    }
     private func resetLevel() { userTapX = nil; isLaunched = false; showResult = false; trailPoints = [] }
 }
 

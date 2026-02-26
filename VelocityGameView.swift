@@ -3,6 +3,7 @@ import SwiftUI
 
 // MARK: - Optimize Velocity Game
 
+@MainActor
 struct VelocityGameView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var score: Int
@@ -24,6 +25,8 @@ struct VelocityGameView: View {
     @State private var showHint = false
     @State private var streak = 0
     @State private var accuracy: Double = 0.0
+    @State private var showCalcOverlay = true
+    @State private var showBadgeOverlay = false
     
     // Level-based target velocity
     private var targetVelocity: Double { 5.0 + Double(level) * 2.5 }
@@ -200,6 +203,14 @@ struct VelocityGameView: View {
                                     .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                             
+                            // Step Calculation Box
+                            GameCalcOverlay(
+                                title: "VELOCITY_CALC",
+                                steps: velocityCalcSteps,
+                                isVisible: $showCalcOverlay
+                            )
+                            .padding(.horizontal, 16)
+                            
                             Spacer().frame(height: 40)
                         }
                         .padding(.top, 20)
@@ -207,6 +218,30 @@ struct VelocityGameView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showBadgeOverlay) {
+            BadgeEarnedOverlay(badgeName: "Velocity Virtuoso") {
+                showBadgeOverlay = false
+                level = 1
+                mass = 5.0
+                friction = 2.0
+                retryLevel()
+            }
+        }
+    }
+    
+    private var velocityCalcSteps: [(label: String, value: String)] {
+        let inputF = Double(forceInput) ?? 0
+        let netForce = max(0, inputF - friction)
+        let accel = netForce / mass
+        let finalV = accel * 3.0
+        return [
+            (label: "F applied", value: "\(String(format: "%.1f", inputF)) N"),
+            (label: "F net = F - f", value: "\(String(format: "%.1f", inputF)) - \(String(format: "%.1f", friction)) = \(String(format: "%.1f", netForce)) N"),
+            (label: "a = F_net / m", value: "\(String(format: "%.2f", netForce)) / \(String(format: "%.1f", mass)) = \(String(format: "%.2f", accel)) m/s²"),
+            (label: "v = u + a·t", value: "0 + \(String(format: "%.2f", accel)) × 3 = \(String(format: "%.2f", finalV)) m/s"),
+            (label: "Target v", value: "\(String(format: "%.1f", targetVelocity)) m/s"),
+            (label: "Δv (error)", value: "\(String(format: "%.2f", abs(finalV - targetVelocity))) m/s"),
+        ]
     }
     
     private func launchSimulation() {
@@ -249,9 +284,24 @@ struct VelocityGameView: View {
         }
     }
     
-    private func nextLevel() { level = min(level + 1, 10); mass += 2.0; friction += 0.5; retryLevel() }
+    private func nextLevel() {
+        if level >= 10 {
+            GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 1, badge: "Velocity Virtuoso")
+            showResult = false
+            showBadgeOverlay = true
+        } else {
+            level += 1
+            mass += 2.0
+            friction += 0.5
+            if level > 3 {
+                GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 1, badge: "Velocity Virtuoso")
+            }
+            retryLevel()
+        }
+    }
     private func retryLevel() { withAnimation { forceInput = ""; showResult = false; objectX = 0; currentVelocity = 0 } }
 }
+
 
 // MARK: - Supporting Views
 

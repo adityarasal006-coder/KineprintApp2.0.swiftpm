@@ -74,6 +74,9 @@ struct MathematicsView: View {
                             }
                         })
                         
+                        // Progress Tracker
+                        MathProgressTracker()
+                        
                         // Revision Flashcards Section
                         MathInsightView(mathManager: mathManager)
                         
@@ -99,6 +102,7 @@ struct MathematicsView: View {
 struct MathSelectionView: View {
     @ObservedObject var mathManager: MathChallengeManager
     var onRun: (MathChallengeType) -> Void
+    @AppStorage("unlockedMathGamesCount") private var unlockedMathCount = 3
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
     
     var body: some View {
@@ -116,7 +120,7 @@ struct MathSelectionView: View {
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
-                    ForEach(MathChallengeType.allCases, id: \.self) { type in
+                    ForEach(Array(MathChallengeType.allCases.enumerated()), id: \.element) { index, type in
                         Button(action: {
                             withAnimation(.spring()) {
                                 mathManager.selectChallenge(type)
@@ -137,11 +141,17 @@ struct MathSelectionView: View {
                                     Text(type.rawValue.uppercased())
                                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                                         .foregroundColor(mathManager.selectedChallengeType == type ? neonCyan : .white)
+                                        .lineLimit(2)
+                                        .minimumScaleFactor(0.8)
+                                    Text("TOPIC: \(type.concept)")
+                                        .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                        .foregroundColor(.gray)
+                                        .lineLimit(1)
                                 }
                                 Spacer()
                             }
                             .padding(14)
-                            .frame(width: 140, height: 120)
+                            .frame(width: 140, height: 140)
                             .background(Color.black.opacity(0.6))
                             .cornerRadius(20)
                             .overlay(
@@ -244,6 +254,87 @@ struct CurrentMathChallengeView: View {
     }
 }
 
+// MARK: - Math Progress Tracker
+struct MathProgressTracker: View {
+    @AppStorage("unlockedMathGamesCount") private var unlockedMathCount = 3
+    @State private var earnedBadges: [String] = []
+    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
+    
+    private let mathBadges = [
+        "Linear Scholar", "Derivative Master", "Integral Architect",
+        "Differential Stabilizer", "Logic Gate Hacker", "Vector Navigator"
+    ]
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "chart.bar.doc.horizontal.fill")
+                    .foregroundColor(neonCyan)
+                Text("PROGRESS_TRACKER")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(neonCyan)
+                Spacer()
+                Text("\(min(unlockedMathCount, 6))/6 UNLOCKED")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(.green)
+            }
+            
+            // Progress bar
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.white.opacity(0.08))
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(neonCyan)
+                        .frame(width: geo.size.width * CGFloat(min(unlockedMathCount, 6)) / 6.0)
+                        .shadow(color: neonCyan.opacity(0.5), radius: 6)
+                }
+            }
+            .frame(height: 6)
+            
+            // Badges row
+            if !earnedBadges.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(mathBadges, id: \.self) { badge in
+                            let isEarned = earnedBadges.contains(badge)
+                            HStack(spacing: 4) {
+                                Image(systemName: isEarned ? "shield.checkered" : "lock.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(isEarned ? neonCyan : .gray.opacity(0.4))
+                                Text(badge.uppercased())
+                                    .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                    .foregroundColor(isEarned ? .white : .gray.opacity(0.4))
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(isEarned ? neonCyan.opacity(0.1) : Color.white.opacity(0.03))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(isEarned ? neonCyan.opacity(0.4) : Color.white.opacity(0.05), lineWidth: 1)
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text("Complete challenges to earn badges")
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(.gray)
+            }
+        }
+        .padding(16)
+        .background(Color.black.opacity(0.6))
+        .cornerRadius(16)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(neonCyan.opacity(0.2), lineWidth: 1))
+        .padding(.horizontal, 16)
+        .onAppear {
+            earnedBadges = UserDefaults.standard.stringArray(forKey: "EarnedBadgesArray") ?? []
+        }
+    }
+}
+
 struct MathInsightView: View {
     @ObservedObject var mathManager: MathChallengeManager
     @State private var showLibrary = false
@@ -322,6 +413,18 @@ enum MathChallengeType: String, CaseIterable {
         case .vectorCalc: return "wind"
         }
     }
+    
+    var concept: String {
+        switch self {
+        case .linearAlgebra: return "Matrix Transforms"
+        case .diffCalculus: return "Rates of Change"
+        case .intCalculus: return "Accumulation"
+        case .diffEq: return "Dynamical Systems"
+        case .discreteMath: return "Boolean Logic"
+        case .vectorCalc: return "Vector Fields"
+        }
+    }
+    
     var formula: String {
         switch self {
         case .linearAlgebra: return "Ax = λx"

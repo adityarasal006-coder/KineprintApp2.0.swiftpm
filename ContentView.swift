@@ -29,12 +29,43 @@ enum AppTab {
 // MARK: - Main View
 
 
+// MARK: - Voice Manager
+
+@MainActor
+class VoiceManager: ObservableObject {
+    @MainActor static let shared = VoiceManager()
+    private let synthesizer = AVSpeechSynthesizer()
+    
+    func speak(_ text: String, rate: Float = 0.45, pitch: Float = 0.85) {
+        synthesizer.stopSpeaking(at: .immediate)
+        let utterance = AVSpeechUtterance(string: text.expandedForSpeech)
+        
+        let voices = AVSpeechSynthesisVoice.speechVoices()
+        // Prioritize a Male British Artificial Intelligence Voice
+        let preferredVoice = voices.first { $0.language == "en-GB" && $0.gender == .male }
+            ?? voices.first { $0.language == "en-US" && $0.gender == .male }
+            ?? AVSpeechSynthesisVoice(language: "en-GB")
+        
+        utterance.voice = preferredVoice
+        utterance.rate = rate
+        utterance.pitchMultiplier = pitch
+        utterance.volume = 0.95
+        
+        synthesizer.speak(utterance)
+    }
+    
+    func stop() {
+        synthesizer.stopSpeaking(at: .immediate)
+    }
+}
+
+
+@MainActor
 struct KineprintView: View {
     @StateObject private var viewModel = KineprintViewModel()
     @State private var selectedTab: AppTab = .home
     @State private var showExitConfirm = false
     @State private var showGoodbye = false
-    private let speechSynth = AVSpeechSynthesizer()
     @Environment(\.scenePhase) private var scenePhase
     
     var body: some View {
@@ -212,24 +243,7 @@ struct KineprintView: View {
     }
     
     private func speak(_ text: String) {
-        speechSynth.stopSpeaking(at: .immediate)
-        let utterance = AVSpeechUtterance(string: text)
-        
-        let voices = AVSpeechSynthesisVoice.speechVoices()
-        // Prioritize a Male British Artificial Intelligence Voice
-        let preferredVoice = voices.first { $0.language == "en-GB" && $0.gender == .male }
-            ?? voices.first { $0.language == "en-US" && $0.gender == .male }
-            ?? AVSpeechSynthesisVoice(language: "en-GB")
-        
-        utterance.voice = preferredVoice
-        utterance.rate = 0.45 // Natural, deliberate speed
-        utterance.pitchMultiplier = 0.85 // Lower pitch for deep male AI voice
-        utterance.volume = 0.95
-        
-        // Add a tiny bit of natural phrasing pause
-        utterance.postUtteranceDelay = 0.1
-        
-        speechSynth.speak(utterance)
+        VoiceManager.shared.speak(text)
     }
 }
 
@@ -1101,6 +1115,48 @@ class KineprintViewModel: ObservableObject {
     func publishPaper(title: String, content: String) {
         let paper = ResearchPaper(id: UUID(), date: Date(), title: title, content: content)
         publishedPapers.append(paper)
+    }
+}
+
+// MARK: - Speech Utility Extension
+extension String {
+    var expandedForSpeech: String {
+        var spokenText = self.replacingOccurrences(of: "_", with: " ")
+        
+        let boundaryReplacements: [String: String] = [
+            "LVL": "Level",
+            "SIM": "Simulation",
+            "INIT": "Initialization",
+            "CALC": "Calculation",
+            "EXP": "Experience",
+            "VEL": "Velocity",
+            "ACC": "Acceleration",
+            "DST": "Distance",
+            "EQN": "Equation",
+            "PROB": "Probability",
+            "VAR": "Variable",
+            "VARS": "Variables",
+            "SUB": "Subtopic",
+            "v0": "v naught",
+            "v₀": "v naught"
+        ]
+        
+        for (short, full) in boundaryReplacements {
+            spokenText = spokenText.replacingOccurrences(of: "\\b\(short)\\b", with: full, options: [.regularExpression, .caseInsensitive])
+        }
+        
+        let exactReplacements: [String: String] = [
+            "V INIT": "Initial Velocity",
+            "v₀": "v naught",
+            "m/s²": "meters per second squared",
+            "m/s": "meters per second"
+        ]
+        
+        for (short, full) in exactReplacements {
+            spokenText = spokenText.replacingOccurrences(of: short, with: full, options: [.caseInsensitive])
+        }
+        
+        return spokenText
     }
 }
 

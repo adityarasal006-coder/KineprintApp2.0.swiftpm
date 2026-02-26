@@ -28,8 +28,10 @@ struct ProfileSettingsView: View {
     @State private var toastMessage = ""
     @State private var showToast = false
     @State private var showOnboardingResetAlert = false
+    @State private var showAboutProtocol = false
     @AppStorage("isOnboardingComplete") private var isOnboardingComplete: Bool = false
     @AppStorage("userName") private var appUserName: String = ""
+    @State private var earnedBadges: [String] = []
 
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
 
@@ -102,7 +104,37 @@ struct ProfileSettingsView: View {
                             }
                         }
 
-
+                        // ─── ACHIEVEMENT BADGES ───
+                        SettingsSection(title: "EARNED BADGES") {
+                            if earnedBadges.isEmpty {
+                                Text("No badges earned yet. Complete challenges to unlock.")
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundColor(.gray)
+                                    .padding(.vertical, 10)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } else {
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 12) {
+                                        ForEach(earnedBadges, id: \.self) { badge in
+                                            VStack(spacing: 8) {
+                                                Image(systemName: "shield.fill")
+                                                    .font(.system(size: 24))
+                                                    .foregroundColor(neonCyan)
+                                                Text(badge.uppercased())
+                                                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                                                    .foregroundColor(.white)
+                                                    .multilineTextAlignment(.center)
+                                                    .lineLimit(2)
+                                            }
+                                            .frame(width: 80, height: 80)
+                                            .background(Color.white.opacity(0.05))
+                                            .cornerRadius(12)
+                                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(neonCyan.opacity(0.3), lineWidth: 1))
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         // ─── DATA EXPORT (ACTIVE) ───
                         SettingsSection(title: "DATA EXPORT") {
@@ -145,9 +177,7 @@ struct ProfileSettingsView: View {
                                     icon: "info.circle",
                                     label: "ABOUT KINEPRINT",
                                     color: neonCyan,
-                                    action: {
-                                        showToastMessage("KineprintApp v2.1 - Neural Interface System. All systems nominal.")
-                                    }
+                                    action: { showAboutProtocol = true }
                                 )
                                 Divider().background(neonCyan.opacity(0.1))
                                 ActionRow(
@@ -209,6 +239,12 @@ struct ProfileSettingsView: View {
         }
         .fullScreenCover(isPresented: $showPerformanceReports) {
             PerformanceAnalyticsView(isPresented: $showPerformanceReports)
+        }
+        .fullScreenCover(isPresented: $showAboutProtocol) {
+            AboutProtocolView()
+        }
+        .onAppear {
+            earnedBadges = UserDefaults.standard.stringArray(forKey: "EarnedBadgesArray") ?? []
         }
     }
 

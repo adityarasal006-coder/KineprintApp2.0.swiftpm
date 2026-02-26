@@ -29,6 +29,8 @@ struct OscillationGameView: View {
     @State private var currentAmplitude: Double = 1.0
     @State private var accuracy: Double = 0.0
     @State private var thinkingLog: [String] = ["SYSTEM_IDLE: AWAITING_TUNING", "KINETIC_LINK: STANDBY"]
+    @State private var showCalcOverlay = true
+    @State private var showBadgeOverlay = false
     
     private var naturalFrequency: Double { sqrt(springK / mass) }
     private var criticalDamping: Double { 2.0 * sqrt(springK * mass) }
@@ -157,11 +159,32 @@ struct OscillationGameView: View {
                                     .transition(.move(edge: .bottom).combined(with: .opacity))
                             }
                             
+                            // Step Calculation Box
+                            GameCalcOverlay(
+                                title: "OSCILLATION_CALC",
+                                steps: [
+                                    (label: "ω₀ = √(k/m)", value: String(format: "%.2f", naturalFrequency) + " rad/s"),
+                                    (label: "b_crit = 2√(km)", value: String(format: "%.2f", criticalDamping)),
+                                    (label: "ζ = b / b_crit", value: String(format: "%.3f", dampingRatio)),
+                                    (label: "Type", value: dampingRatio < 1 ? "Underdamped" : dampingRatio == 1 ? "Critical" : "Overdamped"),
+                                    (label: "T = 2π/ω₀", value: String(format: "%.2f", 2 * .pi / max(naturalFrequency, 0.01)) + " s"),
+                                ],
+                                isVisible: $showCalcOverlay
+                            )
+                            .padding(.horizontal, 16)
+                            
                             Spacer().frame(height: 40)
                         }
                         .padding(.top, 20)
                     }
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $showBadgeOverlay) {
+            BadgeEarnedOverlay(badgeName: "Oscillation Expert") {
+                showBadgeOverlay = false
+                level = 1
+                resetSimulation()
             }
         }
     }
@@ -227,7 +250,19 @@ struct OscillationGameView: View {
         stopTimer(); wavePoints = []; elapsed = 0; currentAmplitude = 1.0 + Double(level) * 0.3
         settled = false; showResult = false; updateLog("SIM_RECALIBRATED")
     }
-    private func nextLevel() { level = min(level + 1, 10); resetSimulation() }
+    private func nextLevel() {
+        if level >= 10 {
+            GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 2, badge: "Oscillation Expert")
+            showResult = false
+            showBadgeOverlay = true
+        } else {
+            level += 1
+            if level > 3 {
+                GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 2, badge: "Oscillation Expert")
+            }
+            resetSimulation()
+        }
+    }
 }
 
 struct SpringMassView: View {

@@ -20,7 +20,7 @@ let package = Package(
             teamIdentifier: "PL2H83MN92",
             displayVersion: "1.0",
             bundleVersion: "1",
-            appIcon: .placeholder(icon: .twoPeople),
+            appIcon: .asset("AppIcon"),
             accentColor: .presetColor(.mint),
             supportedDeviceFamilies: [
                 .pad,
@@ -43,8 +43,12 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "AppModule",
-            path: "."
+            path: ".",
+            exclude: [
+                "Package.swift",
+                ".swiftpm"
+            ]
         )
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageVersions: [.v5]
 )

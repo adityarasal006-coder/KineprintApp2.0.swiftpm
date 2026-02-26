@@ -23,6 +23,8 @@ struct EnergyGameView: View {
     @State private var totalScore = 0
     @State private var thinkingLog: [String] = ["ENERGY_GRID: ONLINE", "MONITORING_JOULE_OUTPUT"]
     @State private var dischargeProgress: Double = 0
+    @State private var showCalcOverlay = true
+    @State private var showBadgeOverlay = false
     
     // Required Joules for the level
     private var requiredEnergy: Double {
@@ -195,11 +197,33 @@ struct EnergyGameView: View {
                                     .padding(.horizontal, 16)
                             }
                             
+                            // Step Calculation Box
+                            GameCalcOverlay(
+                                title: "ENERGY_CALC",
+                                steps: [
+                                    (label: "m", value: String(format: "%.1f", mass) + " kg"),
+                                    (label: "v", value: String(format: "%.1f", velocity) + " m/s"),
+                                    (label: "v²", value: String(format: "%.1f", velocity * velocity)),
+                                    (label: "KE = ½mv²", value: String(format: "%.1f", currentKE) + " J"),
+                                    (label: "Target KE", value: String(format: "%.1f", requiredEnergy) + " J"),
+                                    (label: "Δ Energy", value: String(format: "%.1f", abs(currentKE - requiredEnergy)) + " J"),
+                                ],
+                                isVisible: $showCalcOverlay
+                            )
+                            .padding(.horizontal, 16)
+                            
                             Spacer().frame(height: 40)
                         }
                         .padding(.top, 20)
                     }
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $showBadgeOverlay) {
+            BadgeEarnedOverlay(badgeName: "Energy Harvester") {
+                showBadgeOverlay = false
+                level = 1
+                resetParams()
             }
         }
     }
@@ -236,8 +260,17 @@ struct EnergyGameView: View {
     }
     
     private func nextLevel() {
-        level = min(level + 1, 10)
-        resetParams()
+        if level >= 10 {
+            GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 7, badge: "Energy Harvester")
+            showResult = false
+            showBadgeOverlay = true
+        } else {
+            level += 1
+            if level > 3 {
+                GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 7, badge: "Energy Harvester")
+            }
+            resetParams()
+        }
     }
     
     private func resetParams() {

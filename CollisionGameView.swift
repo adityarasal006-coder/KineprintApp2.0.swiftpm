@@ -29,6 +29,8 @@ struct CollisionGameView: View {
     @State private var canvasWidth: CGFloat = 300
     @State private var curV1: Double = 0
     @State private var curV2: Double = 0
+    @State private var showCalcOverlay = true
+    @State private var showBadgeOverlay = false
     
     private var targetZone: (x: CGFloat, width: CGFloat) {
         let x = 200 + CGFloat(level) * 15
@@ -181,11 +183,39 @@ struct CollisionGameView: View {
                                     .padding(.horizontal, 16)
                             }
                             
+                            // Step Calculation Box
+                            GameCalcOverlay(
+                                title: "COLLISION_CALC",
+                                steps: {
+                                    let ke_initial = 0.5 * m1 * v1 * v1
+                                    let v1f = ((m1 - m2) / (m1 + m2)) * v1
+                                    let v2f = (2 * m1 / (m1 + m2)) * v1
+                                    let ke_final = 0.5 * m1 * v1f * v1f + 0.5 * m2 * v2f * v2f
+                                    return [
+                                        (label: "KE_i = ½ m₁v₁²", value: String(format: "%.1f", ke_initial) + " J"),
+                                        (label: "p_i = m₁v₁", value: String(format: "%.1f", m1 * v1) + " kg·m/s"),
+                                        (label: "v1' (elastic)", value: String(format: "%.2f", v1f) + " m/s"),
+                                        (label: "v2' (elastic)", value: String(format: "%.2f", v2f) + " m/s"),
+                                        (label: "KE_f", value: String(format: "%.1f", ke_final) + " J"),
+                                        (label: "KE conserved?", value: abs(ke_initial - ke_final) < 0.1 ? "✓ YES" : "✗ NO"),
+                                    ]
+                                }(),
+                                isVisible: $showCalcOverlay
+                            )
+                            .padding(.horizontal, 16)
+                            
                             Spacer().frame(height: 40)
                         }
                         .padding(.top, 20)
                     }
                 }
+            }
+        }
+        .fullScreenCover(isPresented: $showBadgeOverlay) {
+            BadgeEarnedOverlay(badgeName: "Collision Analyst") {
+                showBadgeOverlay = false
+                level = 1
+                resetParams()
             }
         }
     }
@@ -257,8 +287,17 @@ struct CollisionGameView: View {
     }
     
     private func nextLevel() {
-        level = min(level + 1, 10)
-        resetParams()
+        if level >= 10 {
+            GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 5, badge: "Collision Analyst")
+            showResult = false
+            showBadgeOverlay = true
+        } else {
+            level += 1
+            if level > 3 {
+                GameProgressManager.shared.unlockNext(category: "Physics", currentIndex: 5, badge: "Collision Analyst")
+            }
+            resetParams()
+        }
     }
     
     private func resetParams() {
