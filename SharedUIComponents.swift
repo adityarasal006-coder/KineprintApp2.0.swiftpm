@@ -122,14 +122,16 @@ public struct CoreIdentityCircle: View {
     public let avatarType: CoreShape
     public let avatarColor: Color
     public let backgroundTheme: AvatarBackgroundTheme
+    public let profileImageData: Data?
     public let size: CGFloat
     
     @State private var radarRotation: Double = 0
     
-    public init(avatarType: CoreShape, avatarColor: Color, backgroundTheme: AvatarBackgroundTheme, size: CGFloat = 200) {
+    public init(avatarType: CoreShape, avatarColor: Color, backgroundTheme: AvatarBackgroundTheme, profileImageData: Data? = nil, size: CGFloat = 200) {
         self.avatarType = avatarType
         self.avatarColor = avatarColor
         self.backgroundTheme = backgroundTheme
+        self.profileImageData = profileImageData
         self.size = size
     }
     
@@ -179,9 +181,18 @@ public struct CoreIdentityCircle: View {
                 .clipShape(Circle())
             
             // The user's specific Neural Identity Core
-            Avatar3DView(avatarType: avatarType, avatarColor: avatarColor, isExpanded: false)
-                .frame(width: size, height: size)
-                .clipShape(Circle())
+            if let imageData = profileImageData, let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(avatarColor, lineWidth: 2))
+            } else {
+                Avatar3DView(avatarType: avatarType, avatarColor: avatarColor, isExpanded: false)
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            }
             
             // Glass reflections over the top
             Circle()

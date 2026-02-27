@@ -78,24 +78,9 @@ struct ResearchLibraryView: View {
     
     private var topicPickerView: some View {
         VStack(spacing: 0) {
-            // Back Button
-            HStack {
-                Button(action: { dismiss() }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 14, weight: .bold))
-                        Text("BACK")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    }
-                    .foregroundColor(accent)
-                    .padding(10)
-                }
-                Spacer()
-            }
-            .padding(.horizontal, 10)
             
             Spacer()
-            
+
             // Header
             VStack(spacing: 14) {
                 ZStack {

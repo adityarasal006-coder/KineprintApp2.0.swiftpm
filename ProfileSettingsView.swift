@@ -326,9 +326,10 @@ struct ProfileSettingsView: View {
 @MainActor
 struct ProfileCard: View {
     @ObservedObject var settingsManager: SettingsManager
-    @State private var showAvatarPicker = false
     @State private var showFullAvatarBox = false
     @State private var showExpandedAvatar = false
+    @State private var showPhotoPermission = false
+    @State private var showPhotoPicker = false
     @State private var selectedItem: PhotosPickerItem?
     
     private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
@@ -349,7 +350,7 @@ struct ProfileCard: View {
                     .foregroundColor(.gray)
                 Spacer()
                 
-                Button(action: { showAvatarPicker = true }) {
+                Button(action: { showPhotoPermission = true }) {
                     Text("UPLOAD PHOTO")
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .foregroundColor(neonCyan)
@@ -384,6 +385,7 @@ struct ProfileCard: View {
                             avatarType: settingsManager.avatarType,
                             avatarColor: settingsManager.avatarColor,
                             backgroundTheme: settingsManager.backgroundTheme,
+                            profileImageData: settingsManager.profileImageData,
                             size: 140
                         )
                     }
@@ -468,7 +470,9 @@ struct ProfileCard: View {
                             )
                         }
                         
-                        // Rainbow Palette Trigger
+                        Spacer()
+                        
+                        // Rainbow custom color picker — right corner
                         ColorPicker("", selection: Binding(
                             get: { settingsManager.customAvatarColor },
                             set: { 
@@ -476,17 +480,29 @@ struct ProfileCard: View {
                                 settingsManager.useCustomColor = true
                             }
                         ))
-                            .background(
+                        .labelsHidden()
+                        .scaleEffect(1.2)
+                        .background(
+                            ZStack {
                                 AngularGradient(
                                     gradient: Gradient(colors: [.red, .orange, .yellow, .green, .blue, .purple, .red]),
                                     center: .center
                                 )
+                                .frame(width: 30, height: 30)
                                 .clipShape(Circle())
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white, lineWidth: settingsManager.useCustomColor ? 2 : 0)
-                            )
+                                
+                                if settingsManager.useCustomColor {
+                                    Circle()
+                                        .fill(settingsManager.customAvatarColor)
+                                        .frame(width: 18, height: 18)
+                                }
+                            }
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white, lineWidth: settingsManager.useCustomColor ? 2 : 0)
+                                .frame(width: 30, height: 30)
+                        )
                     }
                 }
             }
@@ -522,9 +538,21 @@ struct ProfileCard: View {
         .sheet(isPresented: $showFullAvatarBox) {
             FullAvatarBoxView(settingsManager: settingsManager, isPresented: $showFullAvatarBox)
         }
-        // Gallery Picker Pop-up
-        .sheet(isPresented: $showAvatarPicker) {
-            PhotoIdentitySheet(settingsManager: settingsManager, isPresented: $showAvatarPicker, selectedItem: $selectedItem)
+        // Photo permission alert
+        .alert("Photo Library Access", isPresented: $showPhotoPermission) {
+            Button("Allow Access") { showPhotoPicker = true }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Kineprint would like to access your photo library to set your profile picture.")
+        }
+        // Photo picker (opens after permission granted)
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedItem, matching: .images)
+        .legacyOnChange(of: selectedItem) { newItem in
+            Task {
+                if let data = try? await newItem?.loadTransferable(type: Data.self) {
+                    settingsManager.profileImageData = data
+                }
+            }
         }
         // Full Screen Expanded Avatar (Snapchat style)
         .fullScreenCover(isPresented: $showExpandedAvatar) {
@@ -761,53 +789,6 @@ struct AvatarExpandedView: View {
     }
 }
 
-struct PhotoIdentitySheet: View {
-    @ObservedObject var settingsManager: SettingsManager
-    @Binding var isPresented: Bool
-    @Binding var selectedItem: PhotosPickerItem?
-    private let neonCyan = Color(red: 0, green: 1, blue: 0.85)
-
-    var body: some View {
-        VStack(spacing: 20) {
-            Text("IDENTITY UPLOAD")
-                .font(.system(size: 18, weight: .bold, design: .monospaced))
-                .foregroundColor(neonCyan)
-                .padding(.top, 40)
-            
-            Text("Select a photo to bypass the factory robot models and use your own biological signature.")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundColor(.gray)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-            
-            PhotosPicker(selection: $selectedItem, matching: .images, photoLibrary: .shared()) {
-                Label("SELECT FROM GALLERY", systemImage: "photo.on.rectangle.angled")
-                    .font(.system(size: 13, weight: .bold, design: .monospaced))
-                    .foregroundColor(.black)
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(neonCyan)
-                    .cornerRadius(12)
-                    .padding(.horizontal, 40)
-            }
-            .legacyOnChange(of: selectedItem) { newItem in
-                Task {
-                    if let data = try? await newItem?.loadTransferable(type: Data.self) {
-                        settingsManager.profileImageData = data
-                        isPresented = false
-                    }
-                }
-            }
-            
-            Button("CANCEL") { isPresented = false }
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundColor(.gray)
-                .padding(.top, 10)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
-    }
-}
 
 
 // MARK: - Reusable Settings Section
@@ -963,6 +944,13 @@ class SettingsManager: ObservableObject {
     @AppStorage("profileImageData") var profileImageData: Data?
     @AppStorage("useCustomColor") var useCustomColor: Bool = false
     @AppStorage("avatarBgStyle") var avatarBgStyle: String = AvatarBackgroundTheme.nebulaVoid.rawValue
+    
+    init() {
+        // Listen for external UserDefaults changes (e.g. from KineprintViewModel)
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+    }
     
     var backgroundTheme: AvatarBackgroundTheme {
         get { AvatarBackgroundTheme(rawValue: avatarBgStyle) ?? .nebulaVoid }

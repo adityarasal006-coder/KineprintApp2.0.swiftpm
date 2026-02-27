@@ -11,9 +11,7 @@ struct LogItem: Identifiable {
 struct HomeDashboardView: View {
     @ObservedObject var viewModel: KineprintViewModel
     @State private var showingAnalytics = false
-    @State private var showingLidarConfig = false
-    @State private var showingLidarDiagnostics = false
-    @State private var showingLidarCalibration = false
+    @State private var showExpandedAvatar = false
     @State private var showingAbout = false
     @State private var scanlineOffset: CGFloat = 0
     @State private var headerGlitch = false
@@ -24,7 +22,7 @@ struct HomeDashboardView: View {
         LogItem(time: "14:02:41", msg: "Booting KINEPRINT OS v2.0...", type: .normal),
         LogItem(time: "14:02:42", msg: "Kernel Initialized ✓", type: .success),
         LogItem(time: "14:02:43", msg: "Loading neural modules...", type: .normal),
-        LogItem(time: "14:02:44", msg: "LiDAR Matrix Calibrated ✓", type: .success),
+        LogItem(time: "14:02:44", msg: "Subsystems Calibrated ✓", type: .success),
         LogItem(time: "14:02:45", msg: "All subsystems nominal ✓", type: .success)
     ]
     
@@ -113,12 +111,22 @@ struct HomeDashboardView: View {
 
                     // ═══ CENTRAL REACTOR / IDENTITY ═══
                     VStack(spacing: 24) {
-                        CoreIdentityCircle(
-                            avatarType: viewModel.avatarType,
-                            avatarColor: viewModel.avatarColor,
-                            backgroundTheme: viewModel.backgroundTheme,
-                            size: 200
-                        )
+                        Button(action: {
+                            let impact = UIImpactFeedbackGenerator(style: .medium)
+                            impact.impactOccurred()
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                                showExpandedAvatar = true
+                            }
+                        }) {
+                            CoreIdentityCircle(
+                                avatarType: viewModel.avatarType,
+                                avatarColor: viewModel.avatarColor,
+                                backgroundTheme: viewModel.backgroundTheme,
+                                profileImageData: viewModel.profileImageData,
+                                size: 200
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
                         
                         // Core Status Badge
                         HStack(spacing: 12) {
@@ -148,14 +156,6 @@ struct HomeDashboardView: View {
                     
                     // ═══ DIAGNOSTICS GRID ═══
                     HStack(spacing: 16) {
-                        DiagnosticWidget(
-                            title: "LIDAR ARRAY",
-                            value: viewModel.lidarAvailable ? "ACTIVE" : "STANDBY",
-                            statusColor: viewModel.lidarAvailable ? .green : .orange,
-                            icon: "point.3.connected.trianglepath.dotted"
-                        ) {
-                            showingLidarConfig = true
-                        }
                         DiagnosticWidget(
                             title: "BLUETOOTH",
                             value: "MONITORING",
@@ -284,27 +284,12 @@ struct HomeDashboardView: View {
         .fullScreenCover(isPresented: $showingAnalytics) {
              PerformanceAnalyticsView(isPresented: $showingAnalytics)
         }
-        .alert("LiDAR Subsystem Config", isPresented: $showingLidarConfig) {
-            Button("Run Diagnostics") {
-                addLog(msg: "Initiating LiDAR diagnostics...", type: .normal)
-                showingLidarDiagnostics = true
-            }
-            Button("Calibrate Matrix") {
-                addLog(msg: "Executing spatial recalibration...", type: .normal)
-                showingLidarCalibration = true
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("The LiDAR depth matrix is currently \(viewModel.lidarAvailable ? "ACTIVE" : "in STANDBY"). Configure module settings internally here.")
-        }
-        .fullScreenCover(isPresented: $showingLidarDiagnostics) {
-            LidarDiagnosticsView()
-        }
-        .fullScreenCover(isPresented: $showingLidarCalibration) {
-            LidarCalibrationView()
-        }
+
         .fullScreenCover(isPresented: $showingAbout) {
             AboutProtocolView()
+        }
+        .fullScreenCover(isPresented: $showExpandedAvatar) {
+            HomeAvatarExpandedView(viewModel: viewModel, isPresented: $showExpandedAvatar)
         }
     }
     
@@ -434,4 +419,137 @@ struct SystemLogEntry: View {
     }
 }
 
-
+// MARK: - Home Avatar Expanded View (Full-Screen Space Experience)
+struct HomeAvatarExpandedView: View {
+    @ObservedObject var viewModel: KineprintViewModel
+    @Binding var isPresented: Bool
+    
+    @State private var appearAnimation = false
+    @State private var starPulse = false
+    
+    var body: some View {
+        ZStack {
+            // Dynamic space background
+            AvatarBackgroundEngine(theme: viewModel.backgroundTheme, color: viewModel.avatarColor)
+            
+            // Close button
+            VStack {
+                HStack {
+                    Spacer()
+                    Button(action: {
+                        let impact = UIImpactFeedbackGenerator(style: .light)
+                        impact.impactOccurred()
+                        withAnimation(.spring()) {
+                            isPresented = false
+                        }
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding()
+                    }
+                }
+                Spacer()
+            }
+            .zIndex(10)
+            
+            VStack(spacing: 0) {
+                // 3D Avatar
+                ZStack {
+                    // Glowing rings
+                    Circle()
+                        .stroke(viewModel.avatarColor.opacity(0.15), lineWidth: 1)
+                        .frame(width: 320, height: 320)
+                        .scaleEffect(starPulse ? 1.05 : 0.95)
+                    
+                    Circle()
+                        .stroke(viewModel.avatarColor.opacity(0.08), lineWidth: 1)
+                        .frame(width: 360, height: 360)
+                        .scaleEffect(starPulse ? 0.95 : 1.05)
+                    
+                    if let imageData = viewModel.profileImageData, let uiImage = UIImage(data: imageData) {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 250, height: 250)
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(viewModel.avatarColor, lineWidth: 4))
+                            .shadow(color: viewModel.avatarColor.opacity(0.8), radius: 30)
+                    } else {
+                        Avatar3DView(avatarType: viewModel.avatarType, avatarColor: viewModel.avatarColor, isExpanded: true)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+                .opacity(appearAnimation ? 1 : 0)
+                .scaleEffect(appearAnimation ? 1 : 0.6)
+                .layoutPriority(1)
+                
+                // Bottom info panel
+                VStack(spacing: 20) {
+                    // Name plate
+                    VStack(spacing: 8) {
+                        Text(viewModel.userName.isEmpty ? "STUDENT" : viewModel.userName.uppercased())
+                            .font(.system(size: 32, weight: .heavy, design: .monospaced))
+                            .foregroundColor(.white)
+                            .shadow(color: .black, radius: 5)
+                        
+                        Text("MODEL: \(viewModel.avatarType.rawValue.uppercased())")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(viewModel.avatarColor)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 6)
+                            .background(Color.black.opacity(0.6))
+                            .cornerRadius(20)
+                            .overlay(RoundedRectangle(cornerRadius: 20).stroke(viewModel.avatarColor.opacity(0.5), lineWidth: 1))
+                    }
+                    
+                    // Environment selector
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("ENVIRONMENT MAPPING")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.horizontal, 24)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 12) {
+                                ForEach(AvatarBackgroundTheme.allCases) { theme in
+                                    Button(action: {
+                                        let impact = UIImpactFeedbackGenerator(style: .medium)
+                                        impact.impactOccurred()
+                                        withAnimation(.easeInOut) {
+                                            viewModel.backgroundTheme = theme
+                                        }
+                                    }) {
+                                        Text(theme.rawValue.uppercased())
+                                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                            .foregroundColor(viewModel.backgroundTheme == theme ? .black : viewModel.avatarColor)
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 10)
+                                            .background(viewModel.backgroundTheme == theme ? viewModel.avatarColor : Color.black.opacity(0.5))
+                                            .cornerRadius(12)
+                                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(viewModel.avatarColor.opacity(0.4), lineWidth: 1))
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                        }
+                    }
+                }
+                .padding(.bottom, 40)
+                .background(
+                    LinearGradient(colors: [Color.black.opacity(0.0), Color.black.opacity(0.8)], startPoint: .top, endPoint: .bottom)
+                )
+                .opacity(appearAnimation ? 1 : 0)
+                .offset(y: appearAnimation ? 0 : 30)
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                appearAnimation = true
+            }
+            withAnimation(.easeInOut(duration: 3.0).repeatForever(autoreverses: true)) {
+                starPulse = true
+            }
+        }
+    }
+}

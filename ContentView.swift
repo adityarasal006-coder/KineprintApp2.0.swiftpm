@@ -987,6 +987,11 @@ class KineprintViewModel: ObservableObject {
     
     init() {
         lidarAvailable = false
+        
+        // Listen for external UserDefaults changes (e.g. from SettingsManager)
+        NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
     
     func completeOnboarding(with name: String) {
