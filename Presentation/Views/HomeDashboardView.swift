@@ -1,11 +1,5 @@
 import SwiftUI
 
-struct LogItem: Identifiable {
-    let id = UUID()
-    let time: String
-    let msg: String
-    let type: SystemLogEntry.LogType
-}
 
 @MainActor
 struct HomeDashboardView: View {
@@ -299,7 +293,7 @@ struct HomeDashboardView: View {
         return formatter.string(from: Date())
     }
     
-    private func addLog(msg: String, type: SystemLogEntry.LogType) {
+    private func addLog(msg: String, type: LogItem.LogType) {
         let newLog = LogItem(time: currentTimeString(), msg: msg, type: type)
         withAnimation {
             systemLogs.append(newLog)
@@ -381,10 +375,8 @@ struct DiagnosticWidget: View {
 struct SystemLogEntry: View {
     let time: String
     let msg: String
-    let type: LogType
+    let type: LogItem.LogType
     private let neonCyan = Color(red: 0.0, green: 0.85, blue: 1.0)
-    
-    enum LogType { case normal, success, error }
     
     var color: Color {
         switch type {

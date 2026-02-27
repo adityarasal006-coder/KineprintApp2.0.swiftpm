@@ -1,16 +1,7 @@
 import SwiftUI
 import SceneKit
 
-// MARK: - Avatar Background Themes
-public enum AvatarBackgroundTheme: String, CaseIterable, Identifiable {
-    case eventHorizon = "Event Horizon"
-    case nebulaVoid = "Nebula Void"
-    case quantumFoam = "Quantum Foam"
-    case hyperspace = "Hyperspace"
-    case deepCosmos = "Deep Cosmos"
-    public var id: String { self.rawValue }
-}
-
+// MARK: - 3D Avatar View (Pure Geometry Engine)
 // MARK: - 3D Avatar View (Pure Geometry Engine)
 public struct Avatar3DView: UIViewRepresentable {
     public let avatarType: CoreShape

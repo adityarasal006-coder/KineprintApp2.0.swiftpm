@@ -304,10 +304,10 @@ struct SecretDiaryView: View {
     
     private let availableFonts: [DiaryFont] = [
         DiaryFont(name: "Palatino", displayName: "Palatino", reqScore: 0, size: 22, lineSpacing: 10, drawSpacing: 36, startY: 48),
-        DiaryFont(name: "Courier", displayName: "Courier", reqScore: 1000, size: 20, lineSpacing: 12, drawSpacing: 35, startY: 46),
-        DiaryFont(name: "Chalkboard SE", displayName: "Chalkboard", reqScore: 3000, size: 20, lineSpacing: 10, drawSpacing: 34, startY: 46),
-        DiaryFont(name: "Marker Felt", displayName: "Marker", reqScore: 6000, size: 22, lineSpacing: 8, drawSpacing: 34, startY: 48),
-        DiaryFont(name: "Snell Roundhand", displayName: "Roundhand", reqScore: 10000, size: 28, lineSpacing: 6, drawSpacing: 38, startY: 54)
+        DiaryFont(name: "Courier", displayName: "Courier", reqScore: 0, size: 20, lineSpacing: 12, drawSpacing: 35, startY: 46),
+        DiaryFont(name: "Chalkboard SE", displayName: "Chalkboard", reqScore: 0, size: 20, lineSpacing: 10, drawSpacing: 34, startY: 46),
+        DiaryFont(name: "Marker Felt", displayName: "Marker", reqScore: 0, size: 22, lineSpacing: 8, drawSpacing: 34, startY: 48),
+        DiaryFont(name: "Snell Roundhand", displayName: "Roundhand", reqScore: 0, size: 28, lineSpacing: 6, drawSpacing: 38, startY: 54)
     ]
     
     private var activeFont: DiaryFont {
@@ -478,22 +478,19 @@ struct SecretDiaryView: View {
                     .padding(.trailing, 8)
                 
                 ForEach(availableFonts, id: \.name) { font in
-                    let isUnlocked = totalGameScore >= font.reqScore
                     Button(action: {
-                        if isUnlocked { selectedFontName = font.name }
+                        selectedFontName = font.name
                     }) {
                         HStack(spacing: 4) {
-                            if !isUnlocked { Image(systemName: "lock.fill").font(.system(size: 10)) }
                             Text(font.displayName)
                         }
                         .font(.custom(font.name, size: 14))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(selectedFontName == font.name ? neonCyan.opacity(0.8) : Color.white.opacity(0.1))
-                        .foregroundColor(selectedFontName == font.name ? .black : (isUnlocked ? .white : .gray))
+                        .foregroundColor(selectedFontName == font.name ? .black : .white)
                         .cornerRadius(8)
                     }
-                    .disabled(!isUnlocked)
                 }
             }
             .padding()
